@@ -67,7 +67,7 @@
 /**
   * @brief This function handles Non maskable interrupt.
   */
-void NMI_Handler(void)
+void NMI_Handler(void)                                             //Interrupcoes mto importantes. Ex: erro no chipset
 {
   /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
 
@@ -82,7 +82,7 @@ void NMI_Handler(void)
 /**
   * @brief This function handles Hard fault interrupt.
   */
-void HardFault_Handler(void)
+void HardFault_Handler(void)                                        //Uma cadegoria de NMI apenas para hardware
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
 
@@ -97,7 +97,7 @@ void HardFault_Handler(void)
 /**
   * @brief This function handles Memory management fault.
   */
-void MemManage_Handler(void)
+void MemManage_Handler(void)                                        //Handler para cagadas na memoria. Ex: acessar NULL
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
 
@@ -112,7 +112,7 @@ void MemManage_Handler(void)
 /**
   * @brief This function handles Prefetch fault, memory access fault.
   */
-void BusFault_Handler(void)
+void BusFault_Handler(void)                                           //Handler para problemas de stack
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
 
@@ -127,7 +127,7 @@ void BusFault_Handler(void)
 /**
   * @brief This function handles Undefined instruction or illegal state.
   */
-void UsageFault_Handler(void)
+void UsageFault_Handler(void)                                         //Handler para erros em nivel de usuario.
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
 
@@ -142,7 +142,7 @@ void UsageFault_Handler(void)
 /**
   * @brief This function handles System service call via SWI instruction.
   */
-void SVC_Handler(void)
+void SVC_Handler(void)                                                //Handler para chamadas de sistema do usuario
 {
   /* USER CODE BEGIN SVCall_IRQn 0 */
 
@@ -155,7 +155,7 @@ void SVC_Handler(void)
 /**
   * @brief This function handles Debug monitor.
   */
-void DebugMon_Handler(void)
+void DebugMon_Handler(void)                                            //interrupcoes do debugger
 {
   /* USER CODE BEGIN DebugMonitor_IRQn 0 */
 
@@ -168,7 +168,7 @@ void DebugMon_Handler(void)
 /**
   * @brief This function handles Pendable request for system service.
   */
-//void PendSV_Handler(void)
+//void PendSV_Handler(void)                                            //interrupcoes de baixa prioridade a nivel de software
 //{
 //  /* USER CODE BEGIN PendSV_IRQn 0 */
 //
@@ -179,19 +179,21 @@ void DebugMon_Handler(void)
 //}
 
 /**
-  * @brief This function handles System tick timer.
+  * @brief This function handles System tick timer.                     
   */
-void SysTick_Handler(void)
-{
+void SysTick_Handler(void)                                              //interrupcoes de alta prioridade a nivel de software
+{                                                                       //disparadas pelo tempo
   /* USER CODE BEGIN SysTick_IRQn 0 */
 
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
-  rtos::OS_tick();
+  rtos::OS_tick();                                                     //subtrai o tick restante da execucao ou delay de todas as threads
   __disable_irq();
   rtos::OS_sched();
   __enable_irq();
+
+  PendSV_Handler();                                                    //chama o pendsv pra trocar o contexto
   /* USER CODE END SysTick_IRQn 1 */
 }
 

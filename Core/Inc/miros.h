@@ -16,6 +16,15 @@ typedef struct {
     /* ... other attributes associated with a thread */
 } OSThread;
 
+class Semaphore{
+    private:
+    uint8_t token;
+
+    public:
+    void lock();
+    void unlock();
+}
+
 const uint16_t TICKS_PER_SEC = 100U;
 
 typedef void (*OSThreadHandler)();

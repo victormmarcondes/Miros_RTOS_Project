@@ -37,156 +37,180 @@ Q_DEFINE_THIS_FILE
 
 namespace rtos {
 
-OSThread * volatile OS_curr; /* pointer to the current thread */
-OSThread * volatile OS_next; /* pointer to the next thread to run */
+    OSThread * volatile OS_curr; /* pointer to the current thread */
+    OSThread * volatile OS_next; /* pointer to the next thread to run */
 
-OSThread *OS_thread[32 + 1]; /* array of threads started so far */
-uint32_t OS_readySet; /* bitmask of threads that are ready to run */
+    OSThread *OS_thread[32 + 1]; /* array of threads started so far */
+    uint32_t OS_readySet; /* bitmask of threads that are ready to run */
 
-uint8_t OS_threadNum; /* number of threads started */
-uint8_t OS_currIdx; /* current thread index for the circular array */
+    uint8_t OS_threadNum; /* number of threads started */
+    uint8_t OS_currIdx; /* current thread index for the circular array */
 
 
-OSThread idleThread;
-void main_idleThread() {
-    while (1) {
-        OS_onIdle();
+    OSThread idleThread;
+
+    void Semaphore::lock(){
+        while(token < 1U){
+            OS_delay(10U);
+        }
+
+        token--;
+
+        return;
     }
-}
 
-void OS_init(void *stkSto, uint32_t stkSize) {
-    /* set the PendSV interrupt priority to the lowest level 0xFF */
-    *(uint32_t volatile *)0xE000ED20 |= (0xFFU << 16);
+    void Semaphore::unlock(){
+        token++;
+        return;
+    }
 
-    /* start idleThread thread */
-    OSThread_start(&idleThread,
-                   &main_idleThread,
-                   stkSto, stkSize);
-}
+    void main_idleThread() {
+        while (1) {                                             //thread de idle
+            OS_onIdle();
+        }
+    }
 
-void OS_sched(void) {
-    if (OS_readySet == 0U) { /* idle condition? */
-    	OS_currIdx = 0U; /* the idle thread */
-    } else {
-    	do{ /* find the next ready thread*/
-            OS_currIdx++;
-            if(OS_currIdx == OS_threadNum){
-            	OS_currIdx = 1;
+    void OS_init(void *stkSto, uint32_t stkSize) {
+        /* set the PendSV interrupt priority to the lowest level 0xFF */
+        *(uint32_t volatile *)0xE000ED20 |= (0xFFU << 16);                            //Pendsv?
+
+        /* start idleThread thread */
+        OSThread_start(&idleThread,                                                   //starta a thread de idle
+                    &main_idleThread,
+                    stkSto, stkSize);
+    }
+
+    void OS_sched(void) {
+        if (OS_readySet == 0U) { /* idle condition? */
+            OS_currIdx = 0U; /* the idle thread */
+        } else {
+            do{ /* find the next ready thread*/
+                OS_currIdx++;
+                if(OS_currIdx == OS_threadNum){                                      //se estiver no fim do vetor de threads, volta pro comeco
+                    OS_currIdx = 1;                                                  //ele volta para 1, pq 0 eh a idle thread
+                }
+                OS_next = OS_thread[OS_currIdx];
+            }while((OS_readySet & (1U <<(OS_currIdx - 1U))) == 0 );
+        }
+        OS_next = OS_thread[OS_currIdx];
+
+        /* trigger PendSV, if needed */
+        if(OS_next != OS_curr){                                                     //Caso nao consiga trocar a thread executada
+            *(uint32_t volatile *)0xE000ED04 = (1U << 28);                          //ele chama o pendsv, para gerar a interrupcao e forcar a troca de contexto
+        }
+    }
+
+    void OS_run(void) {                                                             
+        /* callback to configure and start interrupts */
+        OS_onStartup();
+
+        __disable_irq();                                                                //interrompe a as requests de interrupcoes
+        OS_sched();                                                                     //escalona
+        __enable_irq();                                                                 //liga as interrupcoes de volta.
+        
+        /* the following code should never execute */
+        Q_ERROR();
+    }
+
+    void OS_tick(void) {
+        uint8_t n = 0;
+        for(n=1U;n<OS_threadNum; n++){ 				/* cycle through every thread but the idle */
+            if(OS_thread[n]->timeout != 0U){
+                OS_thread[n]->timeout--;			/* decrease the timeout */
+                if(OS_thread[n]->timeout == 0U){
+                    OS_readySet |= (1U << (n-1U));	/* if the thread is ready mask the corresponding bit */
+                }
             }
-            OS_next = OS_thread[OS_currIdx];
-    	}while((OS_readySet & (1U <<(OS_currIdx - 1U))) == 0 );
-    }
-    OS_next = OS_thread[OS_currIdx];
-
-    /* trigger PendSV, if needed */
-    if(OS_next != OS_curr){
-    	*(uint32_t volatile *)0xE000ED04 = (1U << 28);
-    }
-}
-
-void OS_run(void) {
-    /* callback to configure and start interrupts */
-    OS_onStartup();
-
-    __disable_irq();
-    OS_sched();
-    __enable_irq();
-
-    /* the following code should never execute */
-    Q_ERROR();
-}
-
-void OS_tick(void) {
-	uint8_t n = 0;
-	for(n=1U;n<OS_threadNum; n++){ 				/* cycle through every thread but the idle */
-		if(OS_thread[n]->timeout != 0U){
-			OS_thread[n]->timeout--;			/* decrease the timeout */
-			if(OS_thread[n]->timeout == 0U){
-				OS_readySet |= (1U << (n-1U));	/* if the thread is ready mask the corresponding bit */
-			}
-		}
-	}
-}
-
-void OS_delay(uint32_t ticks) {
-    __asm volatile ("cpsid i");
-
-    /* never call OS_delay from the idleThread */
-    Q_REQUIRE(OS_curr != OS_thread[0]);
-
-    OS_curr->timeout = ticks;
-    OS_readySet &= ~(1U << (OS_currIdx - 1U));
-    OS_sched();
-    __asm volatile ("cpsie i");
- }
-
-void OSThread_start(
-    OSThread *me,
-    OSThreadHandler threadHandler,
-    void *stkSto, uint32_t stkSize)
-{
-    /* round down the stack top to the 8-byte boundary
-    * NOTE: ARM Cortex-M stack grows down from hi -> low memory
-    */
-    uint32_t *sp = (uint32_t *)((((uint32_t)stkSto + stkSize) / 8) * 8);
-    uint32_t *stk_limit;
-
-    /* thread number must be in ragne
-    * and must be unused
-    */
-    Q_REQUIRE((OS_threadNum < Q_DIM(OS_thread)) && (OS_thread[OS_threadNum] == (OSThread *)0));
-
-    *(--sp) = (1U << 24);  /* xPSR */
-    *(--sp) = (uint32_t)threadHandler; /* PC */
-    *(--sp) = 0x0000000EU; /* LR  */
-    *(--sp) = 0x0000000CU; /* R12 */
-    *(--sp) = 0x00000003U; /* R3  */
-    *(--sp) = 0x00000002U; /* R2  */
-    *(--sp) = 0x00000001U; /* R1  */
-    *(--sp) = 0x00000000U; /* R0  */
-    /* additionally, fake registers R4-R11 */
-    *(--sp) = 0x0000000BU; /* R11 */
-    *(--sp) = 0x0000000AU; /* R10 */
-    *(--sp) = 0x00000009U; /* R9 */
-    *(--sp) = 0x00000008U; /* R8 */
-    *(--sp) = 0x00000007U; /* R7 */
-    *(--sp) = 0x00000006U; /* R6 */
-    *(--sp) = 0x00000005U; /* R5 */
-    *(--sp) = 0x00000004U; /* R4 */
-
-    /* save the top of the stack in the thread's attibute */
-    me->sp = sp;
-
-    /* round up the bottom of the stack to the 8-byte boundary */
-    stk_limit = (uint32_t *)(((((uint32_t)stkSto - 1U) / 8) + 1U) * 8);
-
-    /* pre-fill the unused part of the stack with 0xDEADBEEF */
-    for (sp = sp - 1U; sp >= stk_limit; --sp) {
-        *sp = 0xDEADBEEFU;
+        }
     }
 
-    /* register the thread with the OS */
-    OS_thread[OS_threadNum] = me;
-    /* make the thread ready to run */
-    if (OS_threadNum > 0U) {
-        OS_readySet |= (1U << (OS_threadNum - 1U));
+    void OS_yield(){
+        __disable_irq();
+        OS_sched();
+        __enable_irq();
+        PendSV_Handler();
     }
-    OS_threadNum++;
-}
-/***********************************************/
-void OS_onStartup(void) {
-    SystemCoreClockUpdate();
-    SysTick_Config(SystemCoreClock / TICKS_PER_SEC);
 
-    /* set the SysTick interrupt priority (highest) */
-    NVIC_SetPriority(SysTick_IRQn, 0U);
-}
+    void OS_delay(uint32_t ticks) {
+        __asm volatile ("cpsid i");
 
-void OS_onIdle(void) {
-#ifdef NDBEBUG
-    __WFI(); /* stop the CPU and Wait for Interrupt */
-#endif
-}
+        /* never call OS_delay from the idleThread */
+        Q_REQUIRE(OS_curr != OS_thread[0]);
+
+        OS_curr->timeout = ticks;
+        OS_readySet &= ~(1U << (OS_currIdx - 1U));
+        OS_sched();
+        //OS_yield();
+        __asm volatile ("cpsie i");
+    }
+
+    void OSThread_start(                                                                          //starta uma thread
+        OSThread *me,
+        OSThreadHandler threadHandler,
+        void *stkSto, uint32_t stkSize)
+    {
+        /* round down the stack top to the 8-byte boundary
+        * NOTE: ARM Cortex-M stack grows down from hi -> low memory
+        */
+        uint32_t *sp = (uint32_t *)((((uint32_t)stkSto + stkSize) / 8) * 8);                    //arredonda o valor do stack pra baixo
+        uint32_t *stk_limit;                                                                    //define o limite do stack
+
+        /* thread number must be in ragne
+        * and must be unused
+        */
+        Q_REQUIRE((OS_threadNum < Q_DIM(OS_thread)) && (OS_thread[OS_threadNum] == (OSThread *)0));              //require pede que tenha espaco pra uma thread adicional e nao esteja ocupado por outra thread
+
+        *(--sp) = (1U << 24);  /* xPSR */                                    //o stack de memoria do arm comeca ao contrario (enderecos)
+        *(--sp) = (uint32_t)threadHandler; /* PC */                          //ele comeca no fim e vai indo pro comeco
+        *(--sp) = 0x0000000EU; /* LR  */                                     //a cada --sp ele ta olhando pra uma posicao anterior do stack
+        *(--sp) = 0x0000000CU; /* R12 */                                     //e salvando valores la. o que os valores significam exatamente?
+        *(--sp) = 0x00000003U; /* R3  */
+        *(--sp) = 0x00000002U; /* R2  */
+        *(--sp) = 0x00000001U; /* R1  */
+        *(--sp) = 0x00000000U; /* R0  */
+        /* additionally, fake registers R4-R11 */
+        *(--sp) = 0x0000000BU; /* R11 */
+        *(--sp) = 0x0000000AU; /* R10 */
+        *(--sp) = 0x00000009U; /* R9 */
+        *(--sp) = 0x00000008U; /* R8 */
+        *(--sp) = 0x00000007U; /* R7 */
+        *(--sp) = 0x00000006U; /* R6 */
+        *(--sp) = 0x00000005U; /* R5 */
+        *(--sp) = 0x00000004U; /* R4 */
+
+        /* save the top of the stack in the thread's attibute */
+        me->sp = sp;                                                          //atribui o stack a thread
+
+        /* round up the bottom of the stack to the 8-byte boundary */
+        stk_limit = (uint32_t *)(((((uint32_t)stkSto - 1U) / 8) + 1U) * 8);                  //arredonda o limite para cima. O limite fica para baixo, como foi explicado anteriormente
+                                                    
+        /* pre-fill the unused part of the stack with 0xDEADBEEF */
+        for (sp = sp - 1U; sp >= stk_limit; --sp) {                                          //define tudo o que nao foi usado com DEADBEEF (convencao meme)
+            *sp = 0xDEADBEEFU;
+        }
+
+        /* register the thread with the OS */
+        OS_thread[OS_threadNum] = me;                                                   //atualiza o vetor de threads
+        /* make the thread ready to run */
+        if (OS_threadNum > 0U) {
+            OS_readySet |= (1U << (OS_threadNum - 1U));
+        }
+        OS_threadNum++;
+    }
+    /***********************************************/
+    void OS_onStartup(void) {                                                           //atualiza o clock
+        SystemCoreClockUpdate();
+        SysTick_Config(SystemCoreClock / TICKS_PER_SEC);                                //starta o contador de ticks. eh a geracao de interrupcoes pra tarefas periodicas
+
+        /* set the SysTick interrupt priority (highest) */
+        NVIC_SetPriority(SysTick_IRQn, 0U);                                             //Prioridade alta pras interrupcoes geradas pelas tarefas periodicas
+    }
+
+    void OS_onIdle(void) {
+    #ifdef NDBEBUG
+        __WFI(); /* stop the CPU and Wait for Interrupt */
+    #endif
+    }
 
 }//fim namespace
 
@@ -203,23 +227,23 @@ void PendSV_Handler(void) {
 __asm volatile (
 
     /* __disable_irq(); */
-    "  CPSID         I                 \n"
+    "  CPSID         I                 \n"                  //desabilita as interrupcoes
 
     /* if (OS_curr != (OSThread *)0) { */
-    "  LDR           r1,=_ZN4rtos7OS_currE       \n"
+    "  LDR           r1,=_ZN4rtos7OS_currE       \n"        //salvo no registrador 1 o registrador escroto
     "  LDR           r1,[r1,#0x00]     \n"
-    "  CBZ           r1,PendSV_restore \n"
+    "  CBZ           r1,PendSV_restore \n"                  //se o registrador for zero chama a pendsv_restore
 
     /*     push registers r4-r11 on the stack */
-    "  PUSH          {r4-r11}          \n"
+    "  PUSH          {r4-r11}          \n"                  //empurra os valores de r4 ate r11 no stack
 
     /*     OS_curr->sp = sp; */
-    "  LDR           r1,=_ZN4rtos7OS_currE       \n"
+    "  LDR           r1,=_ZN4rtos7OS_currE       \n"         
     "  LDR           r1,[r1,#0x00]     \n"
-    "  STR           sp,[r1,#0x00]     \n"
+    "  STR           sp,[r1,#0x00]     \n"                  
     /* } */
 
-    "PendSV_restore:                   \n"
+    "PendSV_restore:                   \n"                   //funcao
     /* sp = OS_next->sp; */
     "  LDR           r1,=_ZN4rtos7OS_nextE       \n"
     "  LDR           r1,[r1,#0x00]     \n"
@@ -232,12 +256,12 @@ __asm volatile (
     "  STR           r1,[r2,#0x00]     \n"
 
     /* pop registers r4-r11 */
-    "  POP           {r4-r11}          \n"
+    "  POP           {r4-r11}          \n"                   //restaura o valor dos registradores
 
     /* __enable_irq(); */
-    "  CPSIE         I                 \n"
+    "  CPSIE         I                 \n"                   //habilita as interrupcoes
 
     /* return to the next thread */
-    "  BX            lr                \n"
+    "  BX            lr                \n"                   //
     );
 }

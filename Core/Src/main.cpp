@@ -22,7 +22,7 @@
 
 uint32_t conta0=0, conta1=0, conta2=0;
 
-uint32_t stack_blinky1[40];
+uint32_t stack_blinky1[40];                                              //criando o stack e os objetos das threads
 rtos::OSThread blinky1;
 void main_blinky1() {
     while (1) {
@@ -54,10 +54,10 @@ uint32_t stack_idleThread[40];
 int main(void)
 {
 
-	  rtos::OS_init(stack_idleThread, sizeof(stack_idleThread));
+	  rtos::OS_init(stack_idleThread, sizeof(stack_idleThread));               //cria a thread idle
 
 	  /* start blinky1 thread */
-	  rtos::OSThread_start(&blinky1,
+	  rtos::OSThread_start(&blinky1,                                           //starta as threads de blink
 	                 &main_blinky1,
 	                 stack_blinky1, sizeof(stack_blinky1));
 
