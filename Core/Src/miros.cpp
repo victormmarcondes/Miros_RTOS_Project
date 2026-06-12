@@ -46,7 +46,6 @@ namespace rtos {
     uint8_t OS_threadNum; /* number of threads started */
     uint8_t OS_currIdx; /* current thread index for the circular array */
 
-
     OSThread idleThread;
 
     void Semaphore::lock(){
@@ -125,10 +124,7 @@ namespace rtos {
     }
 
     void OS_yield(){
-        __disable_irq();
-        OS_sched();
-        __enable_irq();
-        PendSV_Handler();
+        *(uint32_t volatile *)0xE000ED04 = (1U << 28);
     }
 
     void OS_delay(uint32_t ticks) {
@@ -227,41 +223,41 @@ void PendSV_Handler(void) {
 __asm volatile (
 
     /* __disable_irq(); */
-    "  CPSID         I                 \n"                  //desabilita as interrupcoes
+    "  CPSID         I                 \n"                 //desabilita as interrupcoes
 
     /* if (OS_curr != (OSThread *)0) { */
-    "  LDR           r1,=_ZN4rtos7OS_currE       \n"        //salvo no registrador 1 o registrador escroto
-    "  LDR           r1,[r1,#0x00]     \n"
-    "  CBZ           r1,PendSV_restore \n"                  //se o registrador for zero chama a pendsv_restore
+    "  LDR           r1,=_ZN4rtos7OS_currE       \n"       //salva a thread atual em r1
+    "  LDR           r1,[r1,#0x00]     \n"                 //salva o endereco de memoria da thread em r1
+    "  CBZ           r1,PendSV_restore \n"                 //se o registrador for zero chama a pendsv_restore
 
     /*     push registers r4-r11 on the stack */
-    "  PUSH          {r4-r11}          \n"                  //empurra os valores de r4 ate r11 no stack
+    "  PUSH          {r4-r11}          \n"                 //empurra os valores de r4 ate r11 no stack
 
     /*     OS_curr->sp = sp; */
     "  LDR           r1,=_ZN4rtos7OS_currE       \n"         
-    "  LDR           r1,[r1,#0x00]     \n"
-    "  STR           sp,[r1,#0x00]     \n"                  
+    "  LDR           r1,[r1,#0x00]     \n"                 //salva o primeiro endereco de memoria da variavel 
+    "  STR           sp,[r1,#0x00]     \n"                 //grava o valor do endereco de memoria apontado por r1 no sp
     /* } */
 
-    "PendSV_restore:                   \n"                   //funcao
+    "PendSV_restore:                   \n"                 //funcao
     /* sp = OS_next->sp; */
-    "  LDR           r1,=_ZN4rtos7OS_nextE       \n"
-    "  LDR           r1,[r1,#0x00]     \n"
-    "  LDR           sp,[r1,#0x00]     \n"
+    "  LDR           r1,=_ZN4rtos7OS_nextE       \n"       //salva a proxima thread no r1
+    "  LDR           r1,[r1,#0x00]     \n"                 //salva o endereco de memoria da prox thread no r1
+    "  LDR           sp,[r1,#0x00]     \n"                 //grava o valor do endereco de memoria apontado por r1 no sp
 
     /* OS_curr = OS_next; */
-    "  LDR           r1,=_ZN4rtos7OS_nextE       \n"
-    "  LDR           r1,[r1,#0x00]     \n"
-    "  LDR           r2,=_ZN4rtos7OS_currE       \n"
-    "  STR           r1,[r2,#0x00]     \n"
+    "  LDR           r1,=_ZN4rtos7OS_nextE       \n"       //salva a proxima thread no r1
+    "  LDR           r1,[r1,#0x00]     \n"                 //salva o endereco de memoria da prox thread no r1
+    "  LDR           r2,=_ZN4rtos7OS_currE       \n"       //salva a thread atual em r2
+    "  STR           r1,[r2,#0x00]     \n"                 //salva o endereco de r2 em r1
 
     /* pop registers r4-r11 */
-    "  POP           {r4-r11}          \n"                   //restaura o valor dos registradores
+    "  POP           {r4-r11}          \n"                  //restaura o valor dos registradores falsos
 
     /* __enable_irq(); */
-    "  CPSIE         I                 \n"                   //habilita as interrupcoes
+    "  CPSIE         I                 \n"                  //habilita as interrupcoes
 
     /* return to the next thread */
-    "  BX            lr                \n"                   //
+    "  BX            lr                \n"                  //return
     );
 }
