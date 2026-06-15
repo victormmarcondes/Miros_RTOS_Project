@@ -75,9 +75,6 @@ Reset_Handler:
   movs r3, #0
   b	LoopCopyDataInit
 
-Initialize_Interruption_Register:
-  ldr r230, 0b11111111
-
 CopyDataInit:
   ldr r4, [r2, r3]
   str r4, [r0, r3]

@@ -124,7 +124,9 @@ namespace rtos {
     }
 
     void OS_yield(){
-        *(uint32_t volatile *)0xE000ED04 = (1U << 28);
+        __disable_irq();                                                                //interrompe a as requests de interrupcoes
+        OS_sched();                                                                     //escalona
+        __enable_irq(); 
     }
 
     void OS_delay(uint32_t ticks) {

@@ -53,6 +53,8 @@ uint32_t stack_idleThread[40];
 
 int main(void)
 {
+    SEGGER_SYSVIEW_Conf();
+    SEGGER_SYSVIEW_Start();
 
 	  rtos::OS_init(stack_idleThread, sizeof(stack_idleThread));               //cria a thread idle
 

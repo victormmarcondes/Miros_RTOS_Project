@@ -8,6 +8,10 @@
 #ifndef INC_MIROS_H_
 #define INC_MIROS_H_
 
+#include "SEGGER.h"
+#include "SEGGER_SYSVIEW.h"
+
+
 namespace rtos {
 /* Thread Control Block (TCB) */
 typedef struct {
@@ -16,6 +20,13 @@ typedef struct {
     /* ... other attributes associated with a thread */
 } OSThread;
 
+class TCB{
+    private:
+    uint8_t numThreads;
+    
+
+};
+
 class Semaphore{
     private:
     uint8_t token;
@@ -23,7 +34,7 @@ class Semaphore{
     public:
     void lock();
     void unlock();
-}
+};
 
 const uint16_t TICKS_PER_SEC = 100U;
 
