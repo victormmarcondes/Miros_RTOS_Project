@@ -325,7 +325,7 @@ void CORDIC_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 void FMAC_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 
 /*tabela de interrupção*/
-uint32_t vectors[] __attribute__((section(".isr_vector"))) = {
+const uint32_t vectors[] __attribute__((section(".isr_vector"))) = {
     STACK_START,
     (uint32_t)Reset_Handler,
     (uint32_t)NMI_Handler,

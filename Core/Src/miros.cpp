@@ -29,6 +29,7 @@
 * https://github.com/QuantumLeaps/MiROS
 ****************************************************************************/
 #include <cstdint>
+#include <cstring>
 #include "miros.h"
 #include "qassert.h"
 #include "stm32g4xx.h"
@@ -82,6 +83,7 @@ namespace rtos {
     void OS_sched(void) {
         if (OS_readySet == 0U) { /* idle condition? */
             OS_currIdx = 0U; /* the idle thread */
+            SEGGER_SYSVIEW_OnIdle();
         } else {
             do{ /* find the next ready thread*/
                 OS_currIdx++;
@@ -90,6 +92,7 @@ namespace rtos {
                 }
                 OS_next = OS_thread[OS_currIdx];
             }while((OS_readySet & (1U <<(OS_currIdx - 1U))) == 0 );
+            SEGGER_SYSVIEW_OnTaskStartExec((unsigned)OS_currIdx);
         }
         OS_next = OS_thread[OS_currIdx];
 
@@ -118,6 +121,7 @@ namespace rtos {
                 OS_thread[n]->timeout--;			/* decrease the timeout */
                 if(OS_thread[n]->timeout == 0U){
                     OS_readySet |= (1U << (n-1U));	/* if the thread is ready mask the corresponding bit */
+                    SEGGER_SYSVIEW_OnTaskStartReady((unsigned)n);
                 }
             }
         }
@@ -137,6 +141,7 @@ namespace rtos {
 
         OS_curr->timeout = ticks;
         OS_readySet &= ~(1U << (OS_currIdx - 1U));
+        SEGGER_SYSVIEW_OnTaskStopReady((unsigned)OS_currIdx, 1);
         OS_sched();
         //OS_yield();
         __asm volatile ("cpsie i");
@@ -150,10 +155,12 @@ namespace rtos {
         /* round down the stack top to the 8-byte boundary
         * NOTE: ARM Cortex-M stack grows down from hi -> low memory
         */
+    	SEGGER_SYSVIEW_TASKINFO Info;
+
         uint32_t *sp = (uint32_t *)((((uint32_t)stkSto + stkSize) / 8) * 8);                    //arredonda o valor do stack pra baixo
         uint32_t *stk_limit;                                                                    //define o limite do stack
 
-        /* thread number must be in ragne
+        /* thread number must be in range
         * and must be unused
         */
         Q_REQUIRE((OS_threadNum < Q_DIM(OS_thread)) && (OS_thread[OS_threadNum] == (OSThread *)0));              //require pede que tenha espaco pra uma thread adicional e nao esteja ocupado por outra thread
@@ -194,6 +201,17 @@ namespace rtos {
             OS_readySet |= (1U << (OS_threadNum - 1U));
         }
         OS_threadNum++;
+
+        SEGGER_SYSVIEW_OnTaskCreate((unsigned)OS_threadNum - 1);
+        memset(&Info, 0, sizeof(Info));
+
+        //
+         Info.TaskID = (U32)(OS_threadNum - 1);
+         //Info.sName = Name;
+         //Info.Prio = Priority;
+         Info.StackBase = (U32)stkSto;
+         Info.StackSize = stkSize;
+         SEGGER_SYSVIEW_SendTaskInfo(&Info);
     }
     /***********************************************/
     void OS_onStartup(void) {                                                           //atualiza o clock

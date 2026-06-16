@@ -52,6 +52,9 @@ Additional information:
   #define SEGGER_SYSVIEW_SECTION                  SEGGER_RTT_BUFFER_SECTION
 #endif
 
+#define SEGGER_SYSVIEW_GET_TIMESTAMP() (*(U32 *)(0xE0001004))
+#define SEGGER_SYSVIEW_TIMESTAMP_BITS (32)
+#define SEGGER_SYSVIEW_GET_INTERRUPT_ID() ((*(U32 *)(0xE000ED04)) & 0x1FF)
 
 /*********************************************************************
 * TODO: Add your defines here.                                       *
