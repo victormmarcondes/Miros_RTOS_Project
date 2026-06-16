@@ -77,6 +77,7 @@ namespace rtos {
         /* start idleThread thread */
         OSThread_start(&idleThread,                                                   //starta a thread de idle
                     &main_idleThread,
+					254,
                     stkSto, stkSize);
     }
 
@@ -85,7 +86,7 @@ namespace rtos {
             OS_currIdx = 0U; /* the idle thread */
             SEGGER_SYSVIEW_OnIdle();
         } else {
-            do{ /* find the next ready thread*/
+            /*do{ /* find the next ready thread*//*
                 OS_currIdx++;
                 if(OS_currIdx == OS_threadNum){                                      //se estiver no fim do vetor de threads, volta pro comeco
                     OS_currIdx = 1;                                                  //ele volta para 1, pq 0 eh a idle thread
@@ -93,6 +94,15 @@ namespace rtos {
                 OS_next = OS_thread[OS_currIdx];
             }while((OS_readySet & (1U <<(OS_currIdx - 1U))) == 0 );
             SEGGER_SYSVIEW_OnTaskStartExec((unsigned)OS_currIdx);
+        }*/
+        	uint8_t aux = 0;
+        	for(uint8_t i = 1; 1 < OS_threadNum; i++){
+        		if((OS_readySet & (1U <<(i - 1U))) == 0 ){
+        			if(OS_thread[i]->deadline < OS_thread[aux]->deadline) aux = i;
+        		}
+        	}
+        	OS_currIdx = aux;
+
         }
         OS_next = OS_thread[OS_currIdx];
 
@@ -150,6 +160,7 @@ namespace rtos {
     void OSThread_start(                                                                          //starta uma thread
         OSThread *me,
         OSThreadHandler threadHandler,
+		uint32_t deadline,
         void *stkSto, uint32_t stkSize)
     {
         /* round down the stack top to the 8-byte boundary
@@ -186,6 +197,8 @@ namespace rtos {
         /* save the top of the stack in the thread's attibute */
         me->sp = sp;                                                          //atribui o stack a thread
 
+        me->deadline = deadline;
+
         /* round up the bottom of the stack to the 8-byte boundary */
         stk_limit = (uint32_t *)(((((uint32_t)stkSto - 1U) / 8) + 1U) * 8);                  //arredonda o limite para cima. O limite fica para baixo, como foi explicado anteriormente
                                                     
@@ -194,19 +207,42 @@ namespace rtos {
             *sp = 0xDEADBEEFU;
         }
 
+        /*        tentativa de organizar o arry de threads por prioridade (incompleto)
+        if(!OS_threadNum){OS_thread[0] = me;}
+        else{
+			int i = 1;
+			while(OS_thread[i]->priority < priority){
+				i++;
+			}
+			for(int j = OS_threadNum -1; j != i; j--){
+				OS_thread[j] = OS_thread[j+1];
+			}
+			OS_thread[i] = me;
+			uint32_t mask = ( (2^ (i - 1U)) - 1U);
+			uint32_t shift = bitand(OS_readySet, bitcmp(mask));
+			uint32_t staticc = bitand(OS_readySet, mask);
+			uint32_t output = bitshift (shift, 1U);
+			output = bitor(output, staticc);
+			OS_readySet = output;
+        }
+        */
+
         /* register the thread with the OS */
         OS_thread[OS_threadNum] = me;                                                   //atualiza o vetor de threads
         /* make the thread ready to run */
+
         if (OS_threadNum > 0U) {
             OS_readySet |= (1U << (OS_threadNum - 1U));
         }
         OS_threadNum++;
+
 
         SEGGER_SYSVIEW_OnTaskCreate((unsigned)OS_threadNum - 1);
         memset(&Info, 0, sizeof(Info));
 
         //
          Info.TaskID = (U32)(OS_threadNum - 1);
+
          //Info.sName = Name;
          //Info.Prio = Priority;
          Info.StackBase = (U32)stkSto;

@@ -17,6 +17,7 @@ namespace rtos {
 typedef struct {
     void *sp; /* stack pointer */
     uint32_t timeout; /* timeout delay down-counter */
+    uint32_t deadline;
     /* ... other attributes associated with a thread */
 } OSThread;
 
@@ -63,6 +64,7 @@ void OS_onStartup(void);
 void OSThread_start(
     OSThread *me,
     OSThreadHandler threadHandler,
+	uint32_t deadline,
     void *stkSto, uint32_t stkSize);
 
 }

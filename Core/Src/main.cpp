@@ -61,16 +61,19 @@ int main(void)
 	  /* start blinky1 thread */
 	  rtos::OSThread_start(&blinky1,                                           //starta as threads de blink
 	                 &main_blinky1,
+					 10,
 	                 stack_blinky1, sizeof(stack_blinky1));
 
 	  /* start blinky2 thread */
 	  rtos::OSThread_start(&blinky2,
 	                 &main_blinky2,
+					 10,
 	                 stack_blinky2, sizeof(stack_blinky2));
 
 	  /* start blinky3 thread */
 	  rtos::OSThread_start(&blinky3,
 	                 &main_blinky3,
+					 10,
 	                 stack_blinky3, sizeof(stack_blinky3));
 
 	  /* transfer control to the RTOS to run the threads */
