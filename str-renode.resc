@@ -2,7 +2,7 @@ logFile $ORIGIN//str-miros-renode.log True
 
 using sysbus
 $name?="nucleo_g474re"
-$binpath?=$ORIGIN/Debug/str-miros-stm32.elf
+$binpath?=$ORIGIN/Debug/Miros_RTOS_Project.elf
 
 mach create $name
 
