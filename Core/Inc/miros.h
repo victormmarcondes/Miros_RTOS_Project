@@ -15,9 +15,11 @@
 namespace rtos {
 /* Thread Control Block (TCB) */
 typedef struct {
-    void *sp; /* stack pointer */
+	uint32_t *sp; /* stack pointer */
     uint32_t timeout; /* timeout delay down-counter */
+    uint32_t period;
     uint32_t deadline;
+    uint32_t next_deadline;
     /* ... other attributes associated with a thread */
 } OSThread;
 
@@ -28,11 +30,17 @@ class TCB{
 
 };
 
-class Semaphore{
-    private:
-    uint8_t token;
+class Semaphore {
+private:
 
-    public:
+    int32_t token;
+
+    uint32_t blockedSet;
+
+public:
+
+    Semaphore(int32_t init);
+
     void lock();
     void unlock();
 };
@@ -54,6 +62,8 @@ void OS_run(void);
 
 /* blocking delay */
 void OS_delay(uint32_t ticks);
+
+void OS_yield(void);
 
 /* process all timeouts */
 void OS_tick(void);

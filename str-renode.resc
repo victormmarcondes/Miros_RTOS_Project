@@ -1,4 +1,4 @@
-logFile $ORIGIN//str-miros-renode.log True
+#logFile $ORIGIN//str-miros-renode.log True
 
 using sysbus
 $name?="nucleo_g474re"
