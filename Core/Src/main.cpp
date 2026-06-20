@@ -77,6 +77,7 @@ uint32_t stack_idleThread[256];
 
 int main(void)
 {
+	HAL_Init();
     SEGGER_SYSVIEW_Conf();
     SEGGER_SYSVIEW_Start();
 
