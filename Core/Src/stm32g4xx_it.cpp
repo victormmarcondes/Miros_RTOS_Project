@@ -20,9 +20,11 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32g4xx_it.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "miros.h"
+#include "SEGGER_SYSVIEW.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -181,19 +183,28 @@ void DebugMon_Handler(void)                                            //interru
 /**
   * @brief This function handles System tick timer.                     
   */
-void SysTick_Handler(void)                                              //interrupcoes de alta prioridade a nivel de software
-{                                                                       //disparadas pelo tempo
-  /* USER CODE BEGIN SysTick_IRQn 0 */
 
-  /* USER CODE END SysTick_IRQn 0 */
-  HAL_IncTick();
-  /* USER CODE BEGIN SysTick_IRQn 1 */
-  rtos::OS_tick();                                                     //subtrai o tick restante da execucao ou delay de todas as threads
-  __disable_irq();
-  rtos::OS_sched();
-  __enable_irq();
+void SysTick_Handler(void)
+{
+    SEGGER_SYSVIEW_RecordEnterISR();
 
-  /* USER CODE END SysTick_IRQn 1 */
+    HAL_IncTick();
+
+    rtos::OS_tick();
+
+    /* OS_sched deve rodar com IRQ desabilitado pois modifica OS_next/OS_curr */
+    __disable_irq();
+    rtos::OS_sched();
+    __enable_irq();
+    /*
+    if (rtos::OS_next != rtos::OS_curr)
+    {
+        SEGGER_SYSVIEW_RecordExitISRToScheduler();
+    }
+    else
+    {
+        SEGGER_SYSVIEW_RecordExitISR();
+    }*/
 }
 
 /******************************************************************************/

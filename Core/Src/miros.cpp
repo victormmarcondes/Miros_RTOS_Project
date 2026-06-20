@@ -33,6 +33,7 @@
 #include "miros.h"
 #include "qassert.h"
 #include "stm32g4xx.h"
+#include "SEGGER_SYSVIEW.h"
 
 Q_DEFINE_THIS_FILE
 
@@ -49,20 +50,54 @@ namespace rtos {
 
     OSThread idleThread;
 
-    void Semaphore::lock(){
-        while(token < 1U){
-            OS_delay(10U);
+    Semaphore::Semaphore(int32_t init)
+    {
+        token = init;
+        blockedSet = 0U;
+    }
+
+    void Semaphore::lock()
+        {
+            __disable_irq();
+
+            token--;
+
+            if (token < 0)
+            {
+                SEGGER_SYSVIEW_OnTaskStopReady((uint32_t)OS_currIdx, 0);
+
+                blockedSet   |=  (1U << (OS_currIdx - 1U));
+                OS_readySet  &= ~(1U << (OS_currIdx - 1U));
+
+                OS_sched();
+            }
+
+            __enable_irq();
         }
 
-        token--;
+    void Semaphore::unlock()
+        {
+            __disable_irq();
 
-        return;
-    }
+            token++;
 
-    void Semaphore::unlock(){
-        token++;
-        return;
-    }
+            if (token <= 0)
+            {
+                for (uint8_t i = 1U; i < OS_threadNum; i++)
+                {
+                    if (blockedSet & (1U << (i - 1U)))
+                    {
+                        blockedSet  &= ~(1U << (i - 1U));
+                        OS_readySet |=  (1U << (i - 1U));
+                        SEGGER_SYSVIEW_OnTaskStartReady((unsigned)i);
+                        break;
+                    }
+                }
+                OS_sched();
+            }
+
+            __enable_irq();
+        }
 
     void main_idleThread() {
         while (1) {                                             //thread de idle
@@ -77,41 +112,68 @@ namespace rtos {
         /* start idleThread thread */
         OSThread_start(&idleThread,                                                   //starta a thread de idle
                     &main_idleThread,
-					254,
+					254U,
                     stkSto, stkSize);
     }
 
-    void OS_sched(void) {
-        if (OS_readySet == 0U) { /* idle condition? */
-            OS_currIdx = 0U; /* the idle thread */
-            SEGGER_SYSVIEW_OnIdle();
-        } else {
-            /*do{ /* find the next ready thread*//*
-                OS_currIdx++;
-                if(OS_currIdx == OS_threadNum){                                      //se estiver no fim do vetor de threads, volta pro comeco
-                    OS_currIdx = 1;                                                  //ele volta para 1, pq 0 eh a idle thread
+    void OS_sched(void)
+        {
+            if (OS_readySet == 0U)
+            {
+                /* nenhuma thread pronta -> Idle */
+                OS_currIdx = 0U;
+                OS_next    = OS_thread[0];
+                SEGGER_SYSVIEW_OnIdle();
+            }
+            else
+            {
+                uint8_t aux = 0xFF;
+
+                /* encontra a primeira thread pronta */
+                for (uint8_t i = 1U; i < OS_threadNum; ++i)
+                {
+                    if (OS_readySet & (1U << (i - 1U)))
+                    {
+                        aux = i;
+                        break;
+                    }
                 }
-                OS_next = OS_thread[OS_currIdx];
-            }while((OS_readySet & (1U <<(OS_currIdx - 1U))) == 0 );
-            SEGGER_SYSVIEW_OnTaskStartExec((unsigned)OS_currIdx);
-        }*/
-        	uint8_t aux = 0;
-        	for(uint8_t i = 1; i < OS_threadNum; i++){
-        		if((OS_readySet & (1U <<(i - 1U))) == 0 ){
-        			if(OS_thread[i]->deadline < OS_thread[aux]->deadline) aux = i;
-        		}
-        	}
-        	OS_currIdx = aux;
-            SEGGER_SYSVIEW_OnTaskStartExec((unsigned)OS_currIdx);
 
-        }
-        OS_next = OS_thread[OS_currIdx];
+                if (aux == 0xFF)
+                {
+                    /* segurança: não deveria chegar aqui com readySet != 0 */
+                    OS_currIdx = 0U;
+                    OS_next    = OS_thread[0];
+                    SEGGER_SYSVIEW_OnIdle();
+                }
+                else
+                {
+                    /* EDF: procura a thread pronta com menor next_deadline */
+                    for (uint8_t i = aux + 1U; i < OS_threadNum; ++i)
+                    {
+                        if (OS_readySet & (1U << (i - 1U)))
+                        {
+                            if (OS_thread[i]->next_deadline < OS_thread[aux]->next_deadline)
+                            {
+                                aux = i;
+                            }
+                        }
+                    }
 
-        /* trigger PendSV, if needed */
-        if(OS_next != OS_curr){                                                     //Caso nao consiga trocar a thread executada
-            *(uint32_t volatile *)0xE000ED04 = (1U << 28);                          //ele chama o pendsv, para gerar a interrupcao e forcar a troca de contexto
+                    OS_currIdx = aux;
+                    OS_next    = OS_thread[aux];
+                }
+            }
+            if (OS_next != OS_thread[0])
+            {
+                SEGGER_SYSVIEW_OnTaskStartExec((unsigned)OS_currIdx);
+            }
+            /* solicita troca de contexto via PendSV */
+            if (OS_next != OS_curr)
+            {
+                *(volatile uint32_t *)0xE000ED04 = (1UL << 28); /* PendSVSET */
+            }
         }
-    }
 
     void OS_run(void) {                                                             
         /* callback to configure and start interrupts */
@@ -123,10 +185,11 @@ namespace rtos {
         
         /* the following code should never execute */
         Q_ERROR();
+
     }
 
     void OS_tick(void) {
-        uint8_t n = 0;
+    	uint32_t n = 0;
         for(n=1U;n<OS_threadNum; n++){ 				/* cycle through every thread but the idle */
             if(OS_thread[n]->timeout != 0U){
                 OS_thread[n]->timeout--;			/* decrease the timeout */
@@ -139,24 +202,33 @@ namespace rtos {
     }
 
     void OS_yield(){
-        __disable_irq();                                                                //interrompe a as requests de interrupcoes
-        OS_sched();                                                                     //escalona
-        __enable_irq(); 
+    	__disable_irq();
+    	OS_sched();
+    	__enable_irq();
     }
 
-    void OS_delay(uint32_t ticks) {
-        __asm volatile ("cpsid i");
+    void OS_delay(uint32_t ticks){
+           __asm volatile ("cpsid i");
 
-        /* never call OS_delay from the idleThread */
-        Q_REQUIRE(OS_curr != OS_thread[0]);
+           Q_REQUIRE(OS_curr != OS_thread[0]);
 
-        OS_curr->timeout = ticks;
-        OS_readySet &= ~(1U << (OS_currIdx - 1U));
-        SEGGER_SYSVIEW_OnTaskStopReady((unsigned)OS_currIdx, 1);
-        OS_sched();
-        //OS_yield();
-        __asm volatile ("cpsie i");
-    }
+           OS_curr->timeout       = ticks;
+           OS_curr->next_deadline += OS_curr->period; /* avança o deadline absoluto */
+
+           OS_readySet &= ~(1U << (OS_currIdx - 1U));
+
+           SEGGER_SYSVIEW_OnTaskStopReady((uint32_t)OS_currIdx, 0);
+
+           OS_sched();
+
+           /* Se OS_next ainda é idle, registrar (pode ter mudado em OS_sched) */
+           if (OS_next == OS_thread[0])
+           {
+               SEGGER_SYSVIEW_OnIdle();
+           }
+
+           __asm volatile ("cpsie i");
+       }
 
     void OSThread_start(                                                                          //starta uma thread
         OSThread *me,
@@ -198,7 +270,10 @@ namespace rtos {
         /* save the top of the stack in the thread's attibute */
         me->sp = sp;                                                          //atribui o stack a thread
 
+        me->period = deadline;      // por enquanto usar o mesmo valor
+        me->next_deadline = deadline;
         me->deadline = deadline;
+        me->timeout = 0U;
 
         /* round up the bottom of the stack to the 8-byte boundary */
         stk_limit = (uint32_t *)(((((uint32_t)stkSto - 1U) / 8) + 1U) * 8);                  //arredonda o limite para cima. O limite fica para baixo, como foi explicado anteriormente
@@ -238,11 +313,11 @@ namespace rtos {
         OS_threadNum++;
 
 
-        SEGGER_SYSVIEW_OnTaskCreate((unsigned)OS_threadNum - 1);
+        SEGGER_SYSVIEW_OnTaskCreate((unsigned)OS_threadNum - 1U);
         memset(&Info, 0, sizeof(Info));
 
         //
-         Info.TaskID = (U32)(OS_threadNum - 1);
+         Info.TaskID = (U32)(OS_threadNum - 1U);
 
          //Info.sName = Name;
          //Info.Prio = Priority;
@@ -253,10 +328,13 @@ namespace rtos {
     /***********************************************/
     void OS_onStartup(void) {                                                           //atualiza o clock
         SystemCoreClockUpdate();
-        SysTick_Config(SystemCoreClock / TICKS_PER_SEC);                                //starta o contador de ticks. eh a geracao de interrupcoes pra tarefas periodicas
+
+        SysTick_Config(SystemCoreClock / TICKS_PER_SEC);
+
+        //starta o contador de ticks. eh a geracao de interrupcoes pra tarefas periodicas
 
         /* set the SysTick interrupt priority (highest) */
-        NVIC_SetPriority(SysTick_IRQn, 0U);                                             //Prioridade alta pras interrupcoes geradas pelas tarefas periodicas
+        NVIC_SetPriority(PendSV_IRQn, 0xFFU);                                            //Prioridade alta pras interrupcoes geradas pelas tarefas periodicas
     }
 
     void OS_onIdle(void) {
@@ -275,6 +353,7 @@ void Q_onAssert(char const *module, int loc) {
 }
 
 /***********************************************/
+extern "C"
 __attribute__ ((naked, optimize("-fno-stack-protector")))
 void PendSV_Handler(void) {
 __asm volatile (
