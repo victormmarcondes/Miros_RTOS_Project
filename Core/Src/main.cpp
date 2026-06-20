@@ -77,6 +77,7 @@ uint32_t stack_idleThread[256];
 
 int main(void)
 {
+	__disable_irq();
 	HAL_Init();
     SEGGER_SYSVIEW_Conf();
     SEGGER_SYSVIEW_Start();
@@ -101,6 +102,8 @@ int main(void)
                          &main_blinky3,
                          50U,
                          stack_blinky3, sizeof(stack_blinky3));
+
+    __enable_irq();
 
     rtos::OS_run();
 

@@ -33,6 +33,7 @@
 #include "miros.h"
 #include "qassert.h"
 #include "stm32g4xx.h"
+#include "stm32g4xx_it.h"
 #include "SEGGER_SYSVIEW.h"
 
 Q_DEFINE_THIS_FILE
@@ -116,62 +117,26 @@ namespace rtos {
                     stkSto, stkSize);
     }
 
-    void OS_sched(void)
-        {
-            if (OS_readySet == 0U)
-            {
-                /* nenhuma thread pronta -> Idle */
-                OS_currIdx = 0U;
-                OS_next    = OS_thread[0];
+    void OS_sched(void) {
+            if (OS_readySet == 0U) { /* idle condition? */
+                OS_currIdx = 0U; /* the idle thread */
                 SEGGER_SYSVIEW_OnIdle();
-            }
-            else
-            {
-                uint8_t aux = 0xFF;
+            } else {
+            	uint8_t aux = 0;
+            	uint32_t aux_deadline = 0xFFFFFFFFU;
+            	for(uint8_t i = 1; i < OS_threadNum; i++){
+            		if((OS_readySet & (1U <<(i - 1U))) != 0 ){
+            			if(OS_thread[i]->deadline < aux_deadline) aux = i;
+            		}
+            	}
+            	OS_currIdx = aux;
 
-                /* encontra a primeira thread pronta */
-                for (uint8_t i = 1U; i < OS_threadNum; ++i)
-                {
-                    if (OS_readySet & (1U << (i - 1U)))
-                    {
-                        aux = i;
-                        break;
-                    }
-                }
-
-                if (aux == 0xFF)
-                {
-                    /* segurança: não deveria chegar aqui com readySet != 0 */
-                    OS_currIdx = 0U;
-                    OS_next    = OS_thread[0];
-                    SEGGER_SYSVIEW_OnIdle();
-                }
-                else
-                {
-                    /* EDF: procura a thread pronta com menor next_deadline */
-                    for (uint8_t i = aux + 1U; i < OS_threadNum; ++i)
-                    {
-                        if (OS_readySet & (1U << (i - 1U)))
-                        {
-                            if (OS_thread[i]->next_deadline < OS_thread[aux]->next_deadline)
-                            {
-                                aux = i;
-                            }
-                        }
-                    }
-
-                    OS_currIdx = aux;
-                    OS_next    = OS_thread[aux];
-                }
             }
-            if (OS_next != OS_thread[0])
-            {
-                SEGGER_SYSVIEW_OnTaskStartExec((unsigned)OS_currIdx);
-            }
-            /* solicita troca de contexto via PendSV */
-            if (OS_next != OS_curr)
-            {
-                *(volatile uint32_t *)0xE000ED04 = (1UL << 28); /* PendSVSET */
+            OS_next = OS_thread[OS_currIdx];
+
+            /* trigger PendSV, if needed */
+            if(OS_next != OS_curr){                                                     //Caso nao consiga trocar a thread executada
+                *(uint32_t volatile *)0xE000ED04 = (1U << 28);                          //ele chama o pendsv, para gerar a interrupcao e forcar a troca de contexto
             }
         }
 
@@ -283,35 +248,16 @@ namespace rtos {
             *sp = 0xDEADBEEFU;
         }
 
-        /*        tentativa de organizar o arry de threads por prioridade (incompleto)
-        if(!OS_threadNum){OS_thread[0] = me;}
-        else{
-			int i = 1;
-			while(OS_thread[i]->priority < priority){
-				i++;
-			}
-			for(int j = OS_threadNum -1; j != i; j--){
-				OS_thread[j] = OS_thread[j+1];
-			}
-			OS_thread[i] = me;
-			uint32_t mask = ( (2^ (i - 1U)) - 1U);
-			uint32_t shift = bitand(OS_readySet, bitcmp(mask));
-			uint32_t staticc = bitand(OS_readySet, mask);
-			uint32_t output = bitshift (shift, 1U);
-			output = bitor(output, staticc);
-			OS_readySet = output;
-        }
-        */
-
         /* register the thread with the OS */
-        OS_thread[OS_threadNum] = me;                                                   //atualiza o vetor de threads
+        OS_thread[OS_threadNum] = me;
+        OS_threadNum++;
+
+        //atualiza o vetor de threads
         /* make the thread ready to run */
 
         if (OS_threadNum > 0U) {
             OS_readySet |= (1U << (OS_threadNum - 1U));
         }
-        OS_threadNum++;
-
 
         SEGGER_SYSVIEW_OnTaskCreate((unsigned)OS_threadNum - 1U);
         memset(&Info, 0, sizeof(Info));
@@ -326,15 +272,26 @@ namespace rtos {
          SEGGER_SYSVIEW_SendTaskInfo(&Info);
     }
     /***********************************************/
-    void OS_onStartup(void) {                                                           //atualiza o clock
-        SystemCoreClockUpdate();
+    void OS_onStartup(void) {
+        // 1. O código chega aqui?
+        // Coloque um breakpoint na linha de baixo.
+        SystemCoreClock = HAL_RCC_GetSysClockFreq();
 
-        SysTick_Config(SystemCoreClock / TICKS_PER_SEC);
+        // ARMADILHA 1: O clock retornou zero? (Falta de inicialização da HAL)
+        if (SystemCoreClock == 0) {
+            while(1);
+        }
 
-        //starta o contador de ticks. eh a geracao de interrupcoes pra tarefas periodicas
+        // Tenta ligar o SysTick
+        uint32_t erro = SysTick_Config(SystemCoreClock / TICKS_PER_SEC);
 
-        /* set the SysTick interrupt priority (highest) */
-        NVIC_SetPriority(PendSV_IRQn, 0xFFU);                                            //Prioridade alta pras interrupcoes geradas pelas tarefas periodicas
+        // ARMADILHA 2: O valor estourou os 24 bits de novo?
+        if (erro != 0) {
+            while(1);
+        }
+
+        NVIC_SetPriority(PendSV_IRQn, 0xFFU);
+        NVIC_SetPriority(SysTick_IRQn, 0x00);
     }
 
     void OS_onIdle(void) {
