@@ -70,8 +70,17 @@ namespace rtos {
                 blockedSet   |=  (1U << (OS_currIdx - 1U));
                 OS_readySet  &= ~(1U << (OS_currIdx - 1U));
 
+                uint32_t backup = lockingSet;
+                while(backup != 0){
+                    uint8_t thread = __builtin_ctz(backup);
+                    OS_thread[thread + 1]->deadline = OS_curr->deadline - 1;
+                    backup &= ~(1U << thread);
+                }
+
                 OS_sched();
             }
+
+            lockingSet |= (1U << (OS_currIdx - 1U));
 
             __enable_irq();
         }
@@ -96,6 +105,9 @@ namespace rtos {
                 }
                 OS_sched();
             }
+
+            lockingSet &= ~(1U << (OS_currIdx -1));
+            OS_curr->deadline = OS_curr->next_deadline;
 
             __enable_irq();
         }

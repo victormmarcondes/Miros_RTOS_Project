@@ -34,7 +34,7 @@ class Semaphore {
 private:
 
     int32_t token;
-
+    uint32_t lockingSet;
     uint32_t blockedSet;
 
 public:
