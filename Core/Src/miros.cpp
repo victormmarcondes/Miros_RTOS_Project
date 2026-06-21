@@ -138,7 +138,10 @@ namespace rtos {
             	uint32_t aux_deadline = 0xFFFFFFFFU;
             	for(uint8_t i = 1; i < OS_threadNum; i++){
             		if((OS_readySet & (1U <<(i - 1U))) != 0 ){
-            			if(OS_thread[i]->deadline < aux_deadline) aux = i;
+            			if(OS_thread[i]->deadline < aux_deadline){
+                            aux = i;
+                            aux_deadline = OS_thread[i]->deadline
+                        }
             		}
             	}
             	OS_currIdx = aux;
