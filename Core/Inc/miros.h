@@ -4,10 +4,12 @@
  *  Created on: Feb 6, 2025
  *      Author: guilh
  */
+#pragma once
 
 #ifndef INC_MIROS_H_
 #define INC_MIROS_H_
 
+#include <cstdint>
 #include "SEGGER.h"
 #include "SEGGER_SYSVIEW.h"
 
@@ -44,6 +46,10 @@ public:
     void lock();
     void unlock();
 };
+
+	extern uint64_t global_tick;
+    extern uint8_t click;
+    extern OSThread * volatile OS_curr;
 
 const uint16_t TICKS_PER_SEC = 100U;
 

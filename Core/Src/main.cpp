@@ -18,6 +18,7 @@
 
 
 #include "main.h"
+#include "controle.h"
 #include <cstdint>
 #include "miros.h"
 #include "SEGGER_SYSVIEW.h"
@@ -93,6 +94,23 @@ void main_blinky3()
     	conta2 = conta2 + 1;
 
         rtos::OS_delay(25U);
+    }
+}
+
+void aperiodic_server (){             //deadline 40s
+    while(1){
+        if(rtos::click > 0){
+            Controle::SetSetPoint(rtos::click * 100);
+            rtos::click = 0;
+        }
+        rtos::OS_delay(10);
+    }
+}
+
+void thread_controle(){
+    while(1){
+        Controle::ProximaAtuacao();
+        rtos::OS_delay(40);
     }
 }
 

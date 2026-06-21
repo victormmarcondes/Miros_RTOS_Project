@@ -29,6 +29,8 @@
 * @file
 * @brief Customizable and memory-efficient assertions for embedded systems
 */
+#pragma once
+
 #ifndef QASSERT_H
 #define QASSERT_H
 

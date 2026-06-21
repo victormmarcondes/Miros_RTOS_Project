@@ -43,6 +43,9 @@ namespace rtos {
     OSThread * volatile OS_curr; /* pointer to the current thread */
     OSThread * volatile OS_next; /* pointer to the next thread to run */
 
+    uint64_t global_tick = 	0;
+    uint8_t click = 0;
+
     OSThread *OS_thread[32 + 1]; /* array of threads started so far */
     uint32_t OS_readySet; /* bitmask of threads that are ready to run */
 
@@ -140,7 +143,7 @@ namespace rtos {
             		if((OS_readySet & (1U <<(i - 1U))) != 0 ){
             			if(OS_thread[i]->deadline < aux_deadline){
                             aux = i;
-                            aux_deadline = OS_thread[i]->deadline
+                            aux_deadline = OS_thread[i]->deadline;
                         }
             		}
             	}
@@ -169,6 +172,7 @@ namespace rtos {
     }
 
     void OS_tick(void) {
+        global_tick++;
     	uint32_t n = 0;
         for(n=1U;n<OS_threadNum; n++){ 				/* cycle through every thread but the idle */
             if(OS_thread[n]->timeout != 0U){
@@ -307,6 +311,7 @@ namespace rtos {
 
         NVIC_SetPriority(PendSV_IRQn, 0xFFU);
         NVIC_SetPriority(SysTick_IRQn, 0x00);
+        NVIC_SetPriority(EXTI15_10_IRQn, 0x32);
     }
 
     void OS_onIdle(void) {
@@ -323,6 +328,10 @@ void Q_onAssert(char const *module, int loc) {
     (void)loc;    /* avoid the "unused parameter" compiler warning */
     NVIC_SystemReset();
 }
+
+void EXTI15_10_IRQHandler(void){
+    rtos::click += 1;
+} 
 
 /***********************************************/
 extern "C"
