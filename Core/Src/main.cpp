@@ -26,20 +26,45 @@
 volatile uint32_t conta0 = 0U;
 volatile uint32_t conta1 = 0U;
 volatile uint32_t conta2 = 0U;
+volatile uint32_t prod = 100U;
 
-rtos::Semaphore sem(0);
+
+rtos::Semaphore sem(1);
+
+uint32_t stack_produtor[256];
+rtos::OSThread produtor;
+
+void main_produtor(){
+	while(1){
+		sem.lock();
+		prod = prod + 10;
+		sem.unlock();
+
+		rtos::OS_delay(20U);
+	}
+}
+
+uint32_t stack_consumidor[256];
+rtos::OSThread consumidor;
+
+void main_consumidor(){
+	while(1){
+		sem.lock();
+		prod = prod - 10;
+		sem.unlock();
+
+		rtos::OS_delay(10U);
+	}
+}
+
 
 uint32_t stack_blinky1[256];
 rtos::OSThread blinky1;
 
 void main_blinky1()
 {
-    while (1)
-    {
-        sem.lock();
-
+    while (1){
         conta0 = conta0 + 1;
-
 
         rtos::OS_delay(10U);
     }
@@ -52,9 +77,7 @@ void main_blinky2()
 {
     while (1)
     {
-    	 conta1 = conta1 + 1;
-
-        sem.unlock();
+    	conta1 = conta1 + 1;
 
         rtos::OS_delay(20U);
     }
@@ -67,7 +90,7 @@ void main_blinky3()
 {
     while (1)
     {
-    	 conta2 = conta2 + 1;
+    	conta2 = conta2 + 1;
 
         rtos::OS_delay(25U);
     }
@@ -102,6 +125,16 @@ int main(void)
                          &main_blinky3,
                          50U,
                          stack_blinky3, sizeof(stack_blinky3));
+
+    rtos::OSThread_start(&consumidor,
+                             &main_consumidor,
+                             10U,
+                             stack_consumidor, sizeof(stack_consumidor));
+
+    rtos::OSThread_start(&produtor,
+                                 &main_produtor,
+                                 10U,
+                                 stack_produtor, sizeof(stack_produtor));
 
     __enable_irq();
 
