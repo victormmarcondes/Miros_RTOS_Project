@@ -192,19 +192,19 @@ void SysTick_Handler(void)
 
     rtos::OS_tick();
 
-    /* OS_sched deve rodar com IRQ desabilitado pois modifica OS_next/OS_curr */
     __disable_irq();
     rtos::OS_sched();
     __enable_irq();
+
     /*
     if (rtos::OS_next != rtos::OS_curr)
-    {
-        SEGGER_SYSVIEW_RecordExitISRToScheduler();
-    }
-    else
-    {
-        SEGGER_SYSVIEW_RecordExitISR();
-    }*/
+        {
+            SEGGER_SYSVIEW_RecordExitISRToScheduler();
+        }
+        else
+        {
+            SEGGER_SYSVIEW_RecordExitISR();
+        }*/
 }
 
 /******************************************************************************/

@@ -22,6 +22,7 @@ typedef struct {
     uint32_t period;
     uint32_t deadline;
     uint32_t next_deadline;
+    const char *name;
     /* ... other attributes associated with a thread */
 } OSThread;
 
@@ -78,7 +79,7 @@ void OS_tick(void);
 void OS_onStartup(void);
 
 void OSThread_start(
-    OSThread *me,
+    OSThread *me,const char *name,
     OSThreadHandler threadHandler,
 	uint32_t deadline,
     void *stkSto, uint32_t stkSize);

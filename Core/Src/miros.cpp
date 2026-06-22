@@ -126,7 +126,7 @@ namespace rtos {
         *(uint32_t volatile *)0xE000ED20 |= (0xFFU << 16);                            //Pendsv?
 
         /* start idleThread thread */
-        OSThread_start(&idleThread,                                                   //starta a thread de idle
+        OSThread_start(&idleThread, "Idle",                                                  //starta a thread de idle
                     &main_idleThread,
 					254U,
                     stkSto, stkSize);
@@ -135,7 +135,6 @@ namespace rtos {
     void OS_sched(void) {
             if (OS_readySet == 0U) { /* idle condition? */
                 OS_currIdx = 0U; /* the idle thread */
-                SEGGER_SYSVIEW_OnIdle();
             } else {
             	uint8_t aux = 0;
             	uint32_t aux_deadline = 0xFFFFFFFFU;
@@ -145,6 +144,7 @@ namespace rtos {
                             aux = i;
                             aux_deadline = OS_thread[i]->deadline;
                         }
+
             		}
             	}
             	OS_currIdx = aux;
@@ -153,7 +153,16 @@ namespace rtos {
             OS_next = OS_thread[OS_currIdx];
 
             /* trigger PendSV, if needed */
-            if(OS_next != OS_curr){                                                     //Caso nao consiga trocar a thread executada
+            if(OS_next != OS_curr){
+            	if (OS_curr != (OSThread *)0) {
+            	                SEGGER_SYSVIEW_OnTaskStopExec();
+            		}
+            	if (OS_currIdx == 0U) {
+            	                SEGGER_SYSVIEW_OnIdle();
+            	            } else {
+            	            	SEGGER_SYSVIEW_OnTaskStartExec((unsigned)OS_currIdx);
+            	            }
+            	//Caso nao consiga trocar a thread executada
                 *(uint32_t volatile *)0xE000ED04 = (1U << 28);                          //ele chama o pendsv, para gerar a interrupcao e forcar a troca de contexto
             }
         }
@@ -205,17 +214,11 @@ namespace rtos {
 
            OS_sched();
 
-           /* Se OS_next ainda é idle, registrar (pode ter mudado em OS_sched) */
-           if (OS_next == OS_thread[0])
-           {
-               SEGGER_SYSVIEW_OnIdle();
-           }
-
            __asm volatile ("cpsie i");
        }
 
     void OSThread_start(                                                                          //starta uma thread
-        OSThread *me,
+        OSThread *me, const char *name,
         OSThreadHandler threadHandler,
 		uint32_t deadline,
         void *stkSto, uint32_t stkSize)
@@ -253,7 +256,7 @@ namespace rtos {
 
         /* save the top of the stack in the thread's attibute */
         me->sp = sp;                                                          //atribui o stack a thread
-
+        me->name = name;
         me->period = deadline;      // por enquanto usar o mesmo valor
         me->next_deadline = deadline;
         me->deadline = deadline;
@@ -284,7 +287,7 @@ namespace rtos {
         //
          Info.TaskID = (U32)(OS_threadNum - 1U);
 
-         //Info.sName = Name;
+         Info.sName = name;
          //Info.Prio = Priority;
          Info.StackBase = (U32)stkSto;
          Info.StackSize = stkSize;
