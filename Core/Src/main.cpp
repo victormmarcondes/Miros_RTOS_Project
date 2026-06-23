@@ -27,7 +27,7 @@
 volatile uint32_t conta0 = 0U;
 volatile uint32_t conta1 = 0U;
 volatile uint32_t conta2 = 0U;
-volatile uint32_t prod = 1000U;
+volatile uint32_t prod = 100U;
 
 rtos::Semaphore sem(1);
 
@@ -125,9 +125,57 @@ uint32_t stack_controle[256];
 rtos::OSThread controle;
 
 void thread_controle(){
+
+	__HAL_RCC_TIM1_CLK_ENABLE();
+	__HAL_RCC_GPIOC_CLK_ENABLE();
+
+    TIM_HandleTypeDef htim1;
+    htim1.Instance = TIM1;
+    htim1.Init.Prescaler = 83;
+    htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim1.Init.Period = 999;
+    htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+
+    HAL_TIM_PWM_Init(&htim1);
+
+    TIM_OC_InitTypeDef config;
+
+    config.OCMode = TIM_OCMODE_PWM1;
+    config.Pulse = 500;
+    config.OCPolarity = TIM_OCPOLARITY_HIGH;
+    config.OCFastMode = TIM_OCFAST_DISABLE;
+    HAL_TIM_PWM_ConfigChannel(&htim1, &config, TIM_CHANNEL_1);
+
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+
+    GPIO_InitTypeDef GPIO;
+
+    GPIO.Pin = GPIO_PIN_0;
+    GPIO.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO.Pull = GPIO_NOPULL;
+    GPIO.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO.Alternate = GPIO_AF1_TIM15;
+
+
+
+    HAL_GPIO_Init(GPIOC, &GPIO);
+
     while(1){
-        Controle::ProximaAtuacao();
+        int pulse = Controle::TaskControle();
+
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pulse);
+
         rtos::OS_delay(40U);
+    }
+}
+
+uint32_t stack_sensor[256];
+rtos::OSThread sensor;
+
+void thread_sensor(){
+    while(1){
+
+        rtos::OS_delay(30U);
     }
 }
 
@@ -138,25 +186,24 @@ int main(void){
 	HAL_Init();
     SEGGER_SYSVIEW_Conf();
     SEGGER_SYSVIEW_Start();
-
     /* Cria a thread idle */
     rtos::OS_init(stack_idleThread, sizeof(stack_idleThread));
 
     /* Cria thread blinky1 — deadline/período = 100 ticks */
-    rtos::OSThread_start(&blinky1,
+   /* rtos::OSThread_start(&blinky1,
                          "Blinky1",
                          &main_blinky1,
                          80U,
                          stack_blinky1,
                          sizeof(stack_blinky1));
 
-    /* Cria thread blinky2 — deadline/período = 20 ticks */
+    /* Cria thread blinky2 — deadline/período = 20 ticks 
     rtos::OSThread_start(&blinky2,"Blinky2",
                          &main_blinky2,
                          20U,
                          stack_blinky2, sizeof(stack_blinky2));
 
-    /* Cria thread blinky3 — deadline/período = 50 ticks */
+    /* Cria thread blinky3 — deadline/período = 50 ticks 
     rtos::OSThread_start(&blinky3,"Blinky3",
                          &main_blinky3,
                          40U,
@@ -175,7 +222,7 @@ int main(void){
     rtos::OSThread_start(&produtor2,"Prod_2",
                                      &main_produtor2,
                                      20U,
-                                     stack_produtor2, sizeof(stack_produtor2));
+                                     stack_produtor2, sizeof(stack_produtor2)); */
 
     rtos::OSThread_start(&aperiodic,"click",
                                      &aperiodic_server,
@@ -186,6 +233,11 @@ int main(void){
                                          &thread_controle,
                                          10U,
                                          stack_controle, sizeof(stack_controle));
+
+    rtos::OSThread_start(&sensor,"sensor",
+                                         &thread_sensor,
+                                         10U,
+                                         stack_sensor, sizeof(stack_sensor));
 
 
     __enable_irq();
