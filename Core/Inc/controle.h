@@ -24,8 +24,9 @@ class Controle{
 
     public:
     Controle();
-    static float ProximaAtuacao();
-    static float TaskControle();
+    static void ProximaAtuacao();
+    static void TaskControle(void* parametros);
     static void SetSetPoint(float setpoint);
     static void SetDistancia(float distancia){dist_sensor += distancia;}
+    static float GetTension(){return tensao_pwm;}
 };

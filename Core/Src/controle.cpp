@@ -2,7 +2,7 @@
 #include "miros.h"
 #include <cstdint>
 
-float Controle::ProximaAtuacao(){
+void Controle::ProximaAtuacao(){
     float e_k = set_point - dist_sensor;
     float u_k = u_k1 + (q0 * e_k) + (q1 * e_k1);
     //saturação
@@ -18,36 +18,37 @@ float Controle::ProximaAtuacao(){
     u_k1 = u_sat;
     e_k1 = e_k;
 
-    return u_sat;
+    tensao_pwm = u_sat;
+
+    return;
 }
 
-float Controle::TaskControle(){
+void Controle::TaskControle(void* parametros){
     //const uint32_t periodo_40ms = 40; //tick
-    uint64_t tempo_inicio = rtos::global_tick;
+    uint32_t tempo_inicio = rtos::global_tick;
 
-    while(1){
-        //ler
-        /*__disable_irq();
-        float alvo = set_point;
-        float medida_sensor = dist_sensor;
-        __enable_irq();
-        //calculo*/
-        tensao_pwm = ProximaAtuacao();
+    //ler
+    /*__disable_irq();
+    float alvo = set_point;
+    float medida_sensor = dist_sensor;
+    __enable_irq();
+    //calculo*/
+    ProximaAtuacao();
 
-        /*__disable_irq();
-        tensao_pwm = nova_tensao;
-        __enable_irq();*/
-            
-        uint64_t tempo_atual = rtos::global_tick;
-        uint64_t tempo_gasto = tempo_atual - tempo_inicio;
-        if(rtos::OS_curr->deadline < 40){
-            rtos::OS_delay(40 - tempo_gasto);
-        }
-        else{
-            rtos::OS_delay(1U);
-        }
-        tempo_inicio = rtos::global_tick;
+    /*__disable_irq();
+    tensao_pwm = nova_tensao;
+    __enable_irq();*/
+        
+    uint32_t tempo_atual = rtos::global_tick;
+    uint32_t tempo_gasto = tempo_atual - tempo_inicio;
+    if(rtos::OS_curr->deadline < 40){
+        rtos::OS_delay(40 - tempo_gasto);
     }
+    else{
+        rtos::OS_delay(1U);
+    }
+    tempo_inicio = rtos::global_tick;
+    return;
 }
 
 void Controle::SetSetPoint(float setpoint){

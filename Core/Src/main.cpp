@@ -108,19 +108,6 @@ void main_blinky3(){
     }
 }
 
-uint32_t stack_aperiodic[256];
-rtos::OSThread aperiodic;
-
-void aperiodic_server(){             //deadline 40s
-    while(1){
-        if(rtos::click > 0){
-            Controle::SetSetPoint(rtos::click * 100);
-            rtos::click = 0;
-        }
-        rtos::OS_delay(10);
-    }
-}
-
 uint32_t stack_controle[256];
 rtos::OSThread controle;
 
@@ -156,14 +143,12 @@ void thread_controle(){
     GPIO.Speed = GPIO_SPEED_FREQ_LOW;
     GPIO.Alternate = GPIO_AF1_TIM15;
 
-
-
     HAL_GPIO_Init(GPIOC, &GPIO);
 
     while(1){
-        int pulse = Controle::TaskControle();
+        Controle::TaskControle(nullptr);
 
-        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pulse);
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, Controle::GetTension());
 
         rtos::OS_delay(40U);
     }
@@ -180,6 +165,16 @@ void thread_sensor(){
 }
 
 uint32_t stack_idleThread[256];
+
+void EXTI15_10_IRQHandler(void){
+    Controle::SetSetPoint(50);
+    static rtos::AperiodicTask task;
+    task.Handler = &Controle::TaskControle;
+    task.parametros = nullptr;
+    rtos::APTask = &task;
+    rtos::OS_readySet |= 1U;
+}
+
 
 int main(void){
 	__disable_irq();
@@ -224,10 +219,6 @@ int main(void){
                                      20U,
                                      stack_produtor2, sizeof(stack_produtor2)); */
 
-    rtos::OSThread_start(&aperiodic,"click",
-                                     &aperiodic_server,
-                                     5U,
-                                     stack_aperiodic, sizeof(stack_aperiodic));
 
     rtos::OSThread_start(&controle,"controle",
                                          &thread_controle,

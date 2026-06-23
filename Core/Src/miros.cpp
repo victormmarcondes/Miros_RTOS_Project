@@ -43,8 +43,10 @@ namespace rtos {
     OSThread * volatile OS_curr; /* pointer to the current thread */
     OSThread * volatile OS_next; /* pointer to the next thread to run */
 
-    uint64_t global_tick = 	0;
+    uint32_t global_tick = 	0;
     uint8_t click = 0;
+    uint8_t DFS_budget = 20U;
+    const uint8_t DFS_period = 40U;
 
     OSThread *OS_thread[32 + 1]; /* array of threads started so far */
     uint32_t OS_readySet; /* bitmask of threads that are ready to run */
@@ -53,6 +55,11 @@ namespace rtos {
     uint8_t OS_currIdx; /* current thread index for the circular array */
 
     OSThread idleThread;
+
+    OSThread AperiodicServer;
+    uint32_t stack_aperiodic[256];
+
+    AperiodicTask* APTask = nullptr;
 
     Semaphore::Semaphore(int32_t init)
     {
@@ -121,6 +128,18 @@ namespace rtos {
         }
     }
 
+    void DeferrableServer(){
+        while(1){
+            if(DFS_budget > 0){
+                if(APTask == nullptr) break;
+                APTask->Handler(nullptr);
+                APTask = nullptr;
+                OS_readySet &= ~1U;
+            }
+            OS_yield();
+        }
+    }
+
     void OS_init(void *stkSto, uint32_t stkSize) {
         /* set the PendSV interrupt priority to the lowest level 0xFF */
         *(uint32_t volatile *)0xE000ED20 |= (0xFFU << 16);                            //Pendsv?
@@ -130,6 +149,11 @@ namespace rtos {
                     &main_idleThread,
 					254U,
                     stkSto, stkSize);
+
+        OSThread_start(&AperiodicServer, "Aperiodic",
+                    &DeferrableServer,
+                    10U,
+                    stack_aperiodic, sizeof(stack_aperiodic));
     }
 
     void OS_sched(void) {
@@ -182,8 +206,10 @@ namespace rtos {
 
     void OS_tick(void) {
         global_tick++;
+        if(global_tick % 40 == 0) DFS_budget = 20U;
+        if(OS_currIdx == 1) DFS_budget--;
     	uint32_t n = 0;
-        for(n=1U;n<OS_threadNum; n++){ 				/* cycle through every thread but the idle */
+        for(n=2U;n<OS_threadNum; n++){ 				/* cycle through every thread but the idle */
             if(OS_thread[n]->timeout != 0U){
                 OS_thread[n]->timeout--;			/* decrease the timeout */
                 if(OS_thread[n]->timeout == 0U){
@@ -277,7 +303,7 @@ namespace rtos {
         //atualiza o vetor de threads
         /* make the thread ready to run */
 
-        if (OS_threadNum > 0U) {
+        if (OS_threadNum > 1U) {
             OS_readySet |= (1U << (OS_threadNum - 1U));
         }
 
@@ -331,10 +357,6 @@ void Q_onAssert(char const *module, int loc) {
     (void)loc;    /* avoid the "unused parameter" compiler warning */
     NVIC_SystemReset();
 }
-
-void EXTI15_10_IRQHandler(void){
-    rtos::click += 1;
-} 
 
 /***********************************************/
 extern "C"

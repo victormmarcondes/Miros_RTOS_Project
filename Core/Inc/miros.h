@@ -26,12 +26,12 @@ typedef struct {
     /* ... other attributes associated with a thread */
 } OSThread;
 
-class TCB{
-    private:
-    uint8_t numThreads;
-    
+typedef struct{
+    void (*Handler)(void *parametros);
+    void *parametros;
+} AperiodicTask;
 
-};
+extern AperiodicTask* APTask;
 
 class Semaphore {
 private:
@@ -48,9 +48,10 @@ public:
     void unlock();
 };
 
-	extern uint64_t global_tick;
-    extern uint8_t click;
-    extern OSThread * volatile OS_curr;
+extern uint32_t global_tick;
+extern uint8_t click;
+extern OSThread * volatile OS_curr;
+extern uint32_t OS_readySet;
 
 const uint16_t TICKS_PER_SEC = 100U;
 
