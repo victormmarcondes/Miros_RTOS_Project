@@ -1,5 +1,9 @@
 #pragma once
 
+extern "C"{
+    #include "vl53l4cd_api.h"
+}
+
 class Controle{
     public:
     static inline const float KR = 1.00f; //kp
@@ -17,16 +21,18 @@ class Controle{
     static inline volatile float set_point = 200.0f; //altura
     static inline volatile float dist_sensor = 0.0f; //leitura sensor
     static inline volatile float tensao_pwm = 0.0f;  //pwm
+    static inline Dev_t sensor;
 
     //passado
     static inline float e_k1;
     static inline float u_k1;
 
     public:
-    Controle();
-    static void ProximaAtuacao();
-    static void TaskControle(void* parametros);
+    static void init();
+    static void TaskControle();
+    static void TaskAtuador();
     static void SetSetPoint(float setpoint);
     static void SetDistancia(float distancia){dist_sensor += distancia;}
     static float GetTension(){return tensao_pwm;}
+    static void TaskLeitor();
 };

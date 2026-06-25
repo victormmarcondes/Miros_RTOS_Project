@@ -27,7 +27,7 @@ typedef struct {
 } OSThread;
 
 typedef struct{
-    void (*Handler)(void *parametros);
+    void (*Handler)();
     void *parametros;
 } AperiodicTask;
 

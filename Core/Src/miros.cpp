@@ -132,7 +132,7 @@ namespace rtos {
         while(1){
             if(DFS_budget > 0){
                 if(APTask == nullptr) break;
-                APTask->Handler(nullptr);
+                APTask->Handler();
                 APTask = nullptr;
                 OS_readySet &= ~1U;
             }
@@ -142,7 +142,8 @@ namespace rtos {
 
     void OS_init(void *stkSto, uint32_t stkSize) {
         /* set the PendSV interrupt priority to the lowest level 0xFF */
-        *(uint32_t volatile *)0xE000ED20 |= (0xFFU << 16);                            //Pendsv?
+        *(uint32_t volatile *)0xE000ED20 |= (0xFFU << 16);
+        //Pendsv?
 
         /* start idleThread thread */
         OSThread_start(&idleThread, "Idle",                                                  //starta a thread de idle

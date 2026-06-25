@@ -2,7 +2,13 @@
 #include "miros.h"
 #include <cstdint>
 
-void Controle::ProximaAtuacao(){
+void Controle::init(){
+    VL53L4CD_SensorInit(sensor);
+    VL53L4CD_StartRanging(sensor);
+}
+
+void Controle::TaskControle(){
+
     float e_k = set_point - dist_sensor;
     float u_k = u_k1 + (q0 * e_k) + (q1 * e_k1);
     //saturação
@@ -23,31 +29,17 @@ void Controle::ProximaAtuacao(){
     return;
 }
 
-void Controle::TaskControle(void* parametros){
-    //const uint32_t periodo_40ms = 40; //tick
-    uint32_t tempo_inicio = rtos::global_tick;
+void Controle::TaskLeitor(){
+    uint8_t ready = 0;
+    VL53L4CD_ResultsData_t result;
 
-    //ler
-    /*__disable_irq();
-    float alvo = set_point;
-    float medida_sensor = dist_sensor;
-    __enable_irq();
-    //calculo*/
-    ProximaAtuacao();
+    VL53L4CD_CheckForDataReady(sensor, &ready);
 
-    /*__disable_irq();
-    tensao_pwm = nova_tensao;
-    __enable_irq();*/
-        
-    uint32_t tempo_atual = rtos::global_tick;
-    uint32_t tempo_gasto = tempo_atual - tempo_inicio;
-    if(rtos::OS_curr->deadline < 40){
-        rtos::OS_delay(40 - tempo_gasto);
+    if(ready){ 
+        VL53L4CD_GetResult(sensor, &result);
+        dist_sensor = result.distance_mm;
+        VL53L4CD_SensorInit(sensor);
     }
-    else{
-        rtos::OS_delay(1U);
-    }
-    tempo_inicio = rtos::global_tick;
     return;
 }
 
