@@ -1,5 +1,8 @@
 #include "controle.h"
 #include "miros.h"
+#include "main.h"
+
+#include "stm32g4xx_hal.h"
 #include <cstdint>
 
 void Controle::init(){

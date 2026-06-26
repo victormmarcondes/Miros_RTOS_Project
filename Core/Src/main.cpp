@@ -23,7 +23,7 @@
 #include "miros.h"
 #include "SEGGER_SYSVIEW.h"
 #include "SEGGER_RTT.h"
-#include "vl53l4cd_api.h"
+#include "VL53L4CD_api.h"
 
 volatile uint32_t conta0 = 0U;
 volatile uint32_t conta1 = 0U;
@@ -31,7 +31,6 @@ volatile uint32_t conta2 = 0U;
 volatile uint32_t prod = 100U;
 
 uint8_t data_ready = 0;
-VL53L4CD_Result_t resultado;
 
 rtos::Semaphore sem(1);
 
@@ -152,11 +151,11 @@ void thread_atuador(){
     while(1){
         __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, Controle::GetTension());
 
-        rtos::OS_delay(10U);
+        rtos::OS_delay(1U);
     }
 }
 
-uint32_t stack_sensor[256];
+uint32_t stack_sensor[256 * 4];
 rtos::OSThread sensor;
 
 void thread_sensor(){
@@ -164,7 +163,7 @@ void thread_sensor(){
 
     while(1){
         Controle::TaskLeitor();
-        rtos::OS_delay(10U);
+        rtos::OS_delay(1U);
     }
 }
 
@@ -174,7 +173,7 @@ rtos::OSThread controle;
 void thread_controle(){
     while(1){
         Controle::TaskControle();
-        rtos::OS_delay(10U);
+        rtos::OS_delay(1U);
     }
 }
 
@@ -215,7 +214,7 @@ int main(void){
                          40U,
                          stack_blinky3, sizeof(stack_blinky3)); */
 
-    rtos::OSThread_start(&consumidor,"Consumidor",
+/*    rtos::OSThread_start(&consumidor,"Consumidor",
                              &main_consumidor,
                              10U,
                              stack_consumidor, sizeof(stack_consumidor));
@@ -230,8 +229,10 @@ int main(void){
                                      20U,
                                      stack_produtor2, sizeof(stack_produtor2));
 
+                                     */
 
-/*    rtos::OSThread_start(&atuador,"atuador",
+
+    rtos::OSThread_start(&atuador,"atuador",
                                          &thread_atuador,
                                          5U,
                                          stack_atuador, sizeof(stack_atuador));
@@ -244,7 +245,7 @@ int main(void){
     rtos::OSThread_start(&controle,"controle",
 										 &thread_controle,
 										 5U,
-										 stack_controle, sizeof(stack_controle)); */
+										 stack_controle, sizeof(stack_controle));
 
 
     __enable_irq();

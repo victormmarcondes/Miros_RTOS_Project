@@ -1,7 +1,7 @@
 #pragma once
 
 extern "C"{
-    #include "vl53l4cd_api.h"
+    #include "VL53L4CD_api.h"
 }
 
 class Controle{
