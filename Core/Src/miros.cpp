@@ -46,6 +46,7 @@ namespace rtos {
     uint32_t global_tick = 	0;
     uint8_t click = 0;
     uint8_t DFS_budget = 20U;
+    uint8_t DFS_budget_max = 20U;
     const uint8_t DFS_period = 40U;
 
     OSThread *OS_thread[32 + 1]; /* array of threads started so far */
@@ -130,12 +131,11 @@ namespace rtos {
 
     void DeferrableServer(){
         while(1){
-            if(DFS_budget > 0){
-                if(APTask == nullptr) break;
-                APTask->Handler();
-                APTask = nullptr;
-                OS_readySet &= ~1U;
-            }
+        	if(DFS_budget > 0 && APTask != nullptr){  // se tem budget e tarefa pronta, executa
+        	    APTask->Handler();
+        	    APTask = nullptr;
+        	}
+        	OS_readySet &= ~1U;
             OS_yield();
         }
     }
@@ -207,13 +207,14 @@ namespace rtos {
 
     void OS_tick(void) {
         global_tick++;
-        if(global_tick % 40 == 0) DFS_budget = 20U;
-        if(OS_currIdx == 1) DFS_budget--;
+        if(global_tick % DFS_period == 0) DFS_budget = DFS_budget_max;
+        if(OS_currIdx == 1 && DFS_budget > 0) DFS_budget--;
     	uint32_t n = 0;
         for(n=2U;n<OS_threadNum; n++){ 				/* cycle through every thread but the idle */
             if(OS_thread[n]->timeout != 0U){
                 OS_thread[n]->timeout--;			/* decrease the timeout */
                 if(OS_thread[n]->timeout == 0U){
+                	OS_thread[n]->deadline = OS_thread[n]->next_deadline;
                     OS_readySet |= (1U << (n-1U));	/* if the thread is ready mask the corresponding bit */
                     SEGGER_SYSVIEW_OnTaskStartReady((unsigned)n);
                 }
@@ -340,8 +341,8 @@ namespace rtos {
         }
 
         NVIC_SetPriority(PendSV_IRQn, 0xFFU);
-        NVIC_SetPriority(SysTick_IRQn, 0x00);
-        NVIC_SetPriority(EXTI15_10_IRQn, 0x32);
+        NVIC_SetPriority(SysTick_IRQn, 0x00U);
+        NVIC_SetPriority(EXTI15_10_IRQn, 0x32U);
     }
 
     void OS_onIdle(void) {

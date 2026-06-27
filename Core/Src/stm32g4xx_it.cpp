@@ -27,6 +27,11 @@
 #include "SEGGER_SYSVIEW.h"
 /* USER CODE END Includes */
 
+namespace rtos {
+    extern OSThread * volatile OS_curr;
+    extern OSThread * volatile OS_next;
+    // ... todas as outras com extern na frente
+}
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
 
@@ -196,15 +201,11 @@ void SysTick_Handler(void)
     rtos::OS_sched();
     __enable_irq();
 
-    /*
-    if (rtos::OS_next != rtos::OS_curr)
-        {
-            SEGGER_SYSVIEW_RecordExitISRToScheduler();
-        }
-        else
-        {
-            SEGGER_SYSVIEW_RecordExitISR();
-        }*/
+    if(rtos::OS_next != rtos::OS_curr){
+        SEGGER_SYSVIEW_RecordExitISRToScheduler();
+    } else {
+        SEGGER_SYSVIEW_RecordExitISR();
+    }
 }
 
 /******************************************************************************/

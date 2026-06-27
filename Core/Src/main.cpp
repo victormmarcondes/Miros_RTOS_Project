@@ -25,6 +25,8 @@
 #include "SEGGER_RTT.h"
 #include "VL53L4CD_api.h"
 
+#define TASK_PERIOD 50U
+
 volatile uint32_t conta0 = 0U;
 volatile uint32_t conta1 = 0U;
 volatile uint32_t conta2 = 0U;
@@ -112,48 +114,6 @@ void main_blinky3(){
     }
 }
 
-uint32_t stack_atuador[256];
-rtos::OSThread atuador;
-
-void thread_atuador(){
-	__HAL_RCC_TIM1_CLK_ENABLE();
-	__HAL_RCC_GPIOC_CLK_ENABLE();
-
-    TIM_HandleTypeDef htim1;
-    htim1.Instance = TIM1;
-    htim1.Init.Prescaler = 83;
-    htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-    htim1.Init.Period = 999;
-    htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-
-    HAL_TIM_PWM_Init(&htim1);
-
-    TIM_OC_InitTypeDef config;
-
-    config.OCMode = TIM_OCMODE_PWM1;
-    config.Pulse = 500;
-    config.OCPolarity = TIM_OCPOLARITY_HIGH;
-    config.OCFastMode = TIM_OCFAST_DISABLE;
-    HAL_TIM_PWM_ConfigChannel(&htim1, &config, TIM_CHANNEL_1);
-
-    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-
-    GPIO_InitTypeDef GPIO;
-
-    GPIO.Pin = GPIO_PIN_0;
-    GPIO.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO.Pull = GPIO_NOPULL;
-    GPIO.Speed = GPIO_SPEED_FREQ_LOW;
-    GPIO.Alternate = GPIO_AF1_TIM15;
-
-    HAL_GPIO_Init(GPIOC, &GPIO);
-
-    while(1){
-        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, Controle::GetTension());
-
-        rtos::OS_delay(1U);
-    }
-}
 
 uint32_t stack_sensor[256 * 4];
 rtos::OSThread sensor;
@@ -163,7 +123,7 @@ void thread_sensor(){
 
     while(1){
         Controle::TaskLeitor();
-        rtos::OS_delay(1U);
+        rtos::OS_delay(TASK_PERIOD);
     }
 }
 
@@ -173,21 +133,69 @@ rtos::OSThread controle;
 void thread_controle(){
     while(1){
         Controle::TaskControle();
-        rtos::OS_delay(1U);
+        rtos::OS_delay(TASK_PERIOD);
     }
 }
 
-uint32_t stack_idleThread[256];
+uint32_t stack_atuador[256];
+rtos::OSThread atuador;
+
+void thread_atuador(){
+	__HAL_RCC_TIM1_CLK_ENABLE();
+	__HAL_RCC_GPIOC_CLK_ENABLE();
+
+    TIM_HandleTypeDef htim1 = {0};
+    htim1.Instance = TIM1;
+    htim1.Init.Prescaler = 83;
+    htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim1.Init.Period = 999;
+    htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    htim1.Init.RepetitionCounter = 0;
+
+    HAL_TIM_PWM_Init(&htim1);
+
+    TIM_OC_InitTypeDef config = {0};
+
+    config.OCMode = TIM_OCMODE_PWM1;
+    config.Pulse = 500;
+    config.OCPolarity = TIM_OCPOLARITY_HIGH;
+    config.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+    config.OCFastMode = TIM_OCFAST_DISABLE;
+    config.OCIdleState = TIM_OCIDLESTATE_RESET;
+    config.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+    HAL_TIM_PWM_ConfigChannel(&htim1, &config, TIM_CHANNEL_1);
+
+    GPIO_InitTypeDef GPIO = {0};
+
+    GPIO.Pin = GPIO_PIN_0;
+    GPIO.Mode = GPIO_MODE_AF_PP;
+    GPIO.Pull = GPIO_NOPULL;
+    GPIO.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO.Alternate = GPIO_AF2_TIM1;
+
+    HAL_GPIO_Init(GPIOC, &GPIO);
+
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+
+    TIM1->BDTR |= TIM_BDTR_MOE;
+
+    while(1){
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, Controle::GetTension());
+        rtos::OS_delay(TASK_PERIOD);
+    }
+}
 
 void EXTI15_10_IRQHandler(void){
+	__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_13);
     Controle::SetSetPoint(50);
     static rtos::AperiodicTask task;
     task.Handler = &Controle::TaskControle;
     task.parametros = nullptr;
     rtos::APTask = &task;
-    rtos::OS_readySet |= 1U;
+    rtos::OS_readySet |= 1U;  // segundo bit do OS_thread[1]
 }
 
+uint32_t stack_idleThread[256];
 
 int main(void){
 	__disable_irq();
@@ -214,7 +222,7 @@ int main(void){
                          40U,
                          stack_blinky3, sizeof(stack_blinky3)); */
 
-/*    rtos::OSThread_start(&consumidor,"Consumidor",
+    rtos::OSThread_start(&consumidor,"Consumidor",
                              &main_consumidor,
                              10U,
                              stack_consumidor, sizeof(stack_consumidor));
@@ -229,23 +237,25 @@ int main(void){
                                      20U,
                                      stack_produtor2, sizeof(stack_produtor2));
 
-                                     */
 
 
-    rtos::OSThread_start(&atuador,"atuador",
-                                         &thread_atuador,
-                                         5U,
-                                         stack_atuador, sizeof(stack_atuador));
 
     rtos::OSThread_start(&sensor,"sensor",
-                                         &thread_sensor,
-                                         5U,
-                                         stack_sensor, sizeof(stack_sensor));
+                                 &thread_sensor,
+                                 TASK_PERIOD,
+                                 stack_sensor, sizeof(stack_sensor));
 
     rtos::OSThread_start(&controle,"controle",
-										 &thread_controle,
-										 5U,
-										 stack_controle, sizeof(stack_controle));
+    							&thread_controle,
+								TASK_PERIOD,
+    							stack_controle, sizeof(stack_controle));
+
+    rtos::OSThread_start(&atuador,"atuador",
+                                &thread_atuador,
+								TASK_PERIOD,
+                                stack_atuador, sizeof(stack_atuador));
+
+
 
 
     __enable_irq();

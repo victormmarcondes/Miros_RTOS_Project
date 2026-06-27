@@ -28,8 +28,6 @@ void Controle::TaskControle(){
     e_k1 = e_k;
 
     tensao_pwm = u_sat;
-
-    return;
 }
 
 void Controle::TaskLeitor(){
@@ -41,13 +39,14 @@ void Controle::TaskLeitor(){
     if(ready){ 
         VL53L4CD_GetResult(sensor, &result);
         dist_sensor = result.distance_mm;
-        VL53L4CD_SensorInit(sensor);
+        VL53L4CD_ClearInterrupt(sensor);
     }
-    return;
 }
 
 void Controle::SetSetPoint(float setpoint){
-    if(set_point + setpoint > 600){
-        set_point = (int) (set_point + setpoint) % 600;
-    } else {set_point += setpoint;}
+    if(set_point + setpoint > 600.0f){
+        set_point = (set_point + setpoint) - 600.0f;
+    } else {
+    	set_point += setpoint;
+    }
 }
