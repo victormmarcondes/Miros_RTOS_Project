@@ -23,6 +23,7 @@ typedef struct {
     uint32_t deadline;
     uint32_t next_deadline;
     const char *name;
+    void (*task_handler)();
     /* ... other attributes associated with a thread */
 } OSThread;
 
@@ -53,7 +54,7 @@ extern uint8_t click;
 extern OSThread * volatile OS_curr;
 extern uint32_t OS_readySet;
 
-const uint16_t TICKS_PER_SEC = 100U;
+const uint16_t TICKS_PER_SEC = 1000U;
 
 typedef void (*OSThreadHandler)();
 
@@ -81,7 +82,7 @@ void OS_onStartup(void);
 
 void OSThread_start(
     OSThread *me,const char *name,
-    OSThreadHandler threadHandler,
+	void (*threadHandler)(),
 	uint32_t deadline,
     void *stkSto, uint32_t stkSize);
 

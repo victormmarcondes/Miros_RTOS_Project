@@ -66,6 +66,7 @@ namespace rtos {
     {
         token = init;
         blockedSet = 0U;
+        lockingSet = 0U;
     }
 
     void Semaphore::lock()
@@ -140,6 +141,15 @@ namespace rtos {
         }
     }
 
+    static void thread_wrapper(){
+    	while(1){
+    		if(OS_curr->task_handler != nullptr){
+    			OS_curr->task_handler();
+    		}
+    		OS_delay(OS_curr->period);
+    	}
+    }
+
     void OS_init(void *stkSto, uint32_t stkSize) {
         /* set the PendSV interrupt priority to the lowest level 0xFF */
         *(uint32_t volatile *)0xE000ED20 |= (0xFFU << 16);
@@ -163,7 +173,7 @@ namespace rtos {
             } else {
             	uint8_t aux = 0;
             	uint32_t aux_deadline = 0xFFFFFFFFU;
-            	for(uint8_t i = 1; i < OS_threadNum; i++){
+            	for(uint8_t i = 1U; i < OS_threadNum; i++){
             		if((OS_readySet & (1U <<(i - 1U))) != 0 ){
             			if(OS_thread[i]->deadline < aux_deadline){
                             aux = i;
@@ -247,7 +257,7 @@ namespace rtos {
 
     void OSThread_start(                                                                          //starta uma thread
         OSThread *me, const char *name,
-        OSThreadHandler threadHandler,
+		void (*threadHandler)(),
 		uint32_t deadline,
         void *stkSto, uint32_t stkSize)
     {
@@ -265,7 +275,7 @@ namespace rtos {
         Q_REQUIRE((OS_threadNum < Q_DIM(OS_thread)) && (OS_thread[OS_threadNum] == (OSThread *)0));              //require pede que tenha espaco pra uma thread adicional e nao esteja ocupado por outra thread
 
         *(--sp) = (1U << 24);  /* xPSR */                                    //o stack de memoria do arm comeca ao contrario (enderecos)
-        *(--sp) = (uint32_t)threadHandler; /* PC */                          //ele comeca no fim e vai indo pro comeco
+        *(--sp) = (uint32_t)&thread_wrapper; /* PC */                          //ele comeca no fim e vai indo pro comeco
         *(--sp) = 0x0000000EU; /* LR  */                                     //a cada --sp ele ta olhando pra uma posicao anterior do stack
         *(--sp) = 0x0000000CU; /* R12 */                                     //e salvando valores la. o que os valores significam exatamente?
         *(--sp) = 0x00000003U; /* R3  */
@@ -290,6 +300,8 @@ namespace rtos {
         me->deadline = deadline;
         me->timeout = 0U;
 
+        me->task_handler = threadHandler;
+
         /* round up the bottom of the stack to the 8-byte boundary */
         stk_limit = (uint32_t *)(((((uint32_t)stkSto - 1U) / 8) + 1U) * 8);                  //arredonda o limite para cima. O limite fica para baixo, como foi explicado anteriormente
                                                     
@@ -311,15 +323,12 @@ namespace rtos {
 
         SEGGER_SYSVIEW_OnTaskCreate((unsigned)OS_threadNum - 1U);
         memset(&Info, 0, sizeof(Info));
-
         //
-         Info.TaskID = (U32)(OS_threadNum - 1U);
-
-         Info.sName = name;
-         //Info.Prio = Priority;
-         Info.StackBase = (U32)stkSto;
-         Info.StackSize = stkSize;
-         SEGGER_SYSVIEW_SendTaskInfo(&Info);
+        Info.TaskID = (U32)(OS_threadNum - 1U);
+        Info.sName = name;
+        Info.StackBase = (U32)stkSto;
+        Info.StackSize = stkSize;
+        SEGGER_SYSVIEW_SendTaskInfo(&Info);
     }
     /***********************************************/
     void OS_onStartup(void) {
@@ -328,7 +337,7 @@ namespace rtos {
         SystemCoreClock = HAL_RCC_GetSysClockFreq();
 
         // ARMADILHA 1: O clock retornou zero? (Falta de inicialização da HAL)
-        if (SystemCoreClock == 0) {
+        if(SystemCoreClock == 0){
             while(1);
         }
 

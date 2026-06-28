@@ -1,9 +1,10 @@
 #include "controle.h"
 #include "miros.h"
 #include "main.h"
-
 #include "stm32g4xx_hal.h"
 #include <cstdint>
+
+extern rtos::Semaphore sem_setpoint;
 
 void Controle::init(){
     VL53L4CD_SensorInit(sensor);
@@ -11,8 +12,11 @@ void Controle::init(){
 }
 
 void Controle::TaskControle(){
+	sem_setpoint.lock();
+	float sp = set_point;
+	sem_setpoint.unlock();
 
-    float e_k = set_point - dist_sensor;
+    float e_k = sp - dist_sensor;
     float u_k = u_k1 + (q0 * e_k) + (q1 * e_k1);
     //saturação
     if(u_k > U_MAX){
@@ -43,10 +47,7 @@ void Controle::TaskLeitor(){
     }
 }
 
-void Controle::SetSetPoint(float setpoint){
-    if(set_point + setpoint > 600.0f){
-        set_point = (set_point + setpoint) - 600.0f;
-    } else {
-    	set_point += setpoint;
-    }
+void Controle::SetSetPoint(float del){
+    float novo = set_point + del;
+    set_point = (novo > 600.0f) ? (novo - 600.0f) : novo;
 }
