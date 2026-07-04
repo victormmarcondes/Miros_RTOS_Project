@@ -333,22 +333,16 @@ namespace rtos {
     }
     /***********************************************/
     void OS_onStartup(void) {
-        // 1. O código chega aqui?
-        // Coloque um breakpoint na linha de baixo.
-        SystemCoreClock = HAL_RCC_GetSysClockFreq();
 
-        // ARMADILHA 1: O clock retornou zero? (Falta de inicialização da HAL)
-        if(SystemCoreClock == 0){
-            while(1);
-        }
+        GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-        // Tenta ligar o SysTick
-        uint32_t erro = SysTick_Config(SystemCoreClock / TICKS_PER_SEC);
+        __HAL_RCC_GPIOC_CLK_ENABLE();
 
-        // ARMADILHA 2: O valor estourou os 24 bits de novo?
-        if (erro != 0) {
-            while(1);
-        }
+        GPIO_InitStruct.Pin   = GPIO_PIN_13;
+        GPIO_InitStruct.Mode  = GPIO_MODE_IT_FALLING;
+        GPIO_InitStruct.Pull  = GPIO_PULLUP;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;  
+        HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
         NVIC_SetPriority(PendSV_IRQn, 0xFFU);
         NVIC_SetPriority(SysTick_IRQn, 0x00U);
