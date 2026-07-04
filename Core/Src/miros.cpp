@@ -283,6 +283,7 @@ namespace rtos {
         *(--sp) = 0x00000001U; /* R1  */
         *(--sp) = 0x00000000U; /* R0  */
         /* additionally, fake registers R4-R11 */
+        *(--sp) = 0xFFFFFFF9U;
         *(--sp) = 0x0000000BU; /* R11 */
         *(--sp) = 0x0000000AU; /* R10 */
         *(--sp) = 0x00000009U; /* R9 */
@@ -384,7 +385,7 @@ __asm volatile (
     "  CBZ           r1,PendSV_restore \n"                 //se o registrador for zero chama a pendsv_restore
 
     /*     push registers r4-r11 on the stack */
-    "  PUSH          {r4-r11}          \n"                 //empurra os valores de r4 ate r11 no stack
+    "  PUSH          {r4-r11, lr}          \n"                 //empurra os valores de r4 ate r11 no stack
 
     /*     OS_curr->sp = sp; */
     "  LDR           r1,=_ZN4rtos7OS_currE       \n"         
@@ -405,7 +406,7 @@ __asm volatile (
     "  STR           r1,[r2,#0x00]     \n"                 //salva o endereco de r2 em r1
 
     /* pop registers r4-r11 */
-    "  POP           {r4-r11}          \n"                  //restaura o valor dos registradores falsos
+    "  POP           {r4-r11, lr}          \n"                  //restaura o valor dos registradores falsos
 
     /* __enable_irq(); */
     "  CPSIE         I                 \n"                  //habilita as interrupcoes

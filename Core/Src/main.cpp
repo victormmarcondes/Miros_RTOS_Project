@@ -108,14 +108,14 @@ void thread_sensor() {
     Controle::TaskLeitor();        /*ClearInterrupt */
 }
 
-uint32_t stack_controle[256];
+uint32_t stack_controle[256 * 4];
 rtos::OSThread controle;
 
 void thread_controle() {
     Controle::TaskControle();
 }
 
-uint32_t stack_atuador[256];
+uint32_t stack_atuador[256 * 4];
 rtos::OSThread atuador;
 
 void thread_atuador() {
@@ -128,9 +128,9 @@ void thread_atuador() {
 
         /* ---- Configura TIM1 para PWM ---- */
         htim1.Instance               = TIM1;
-        htim1.Init.Prescaler         = 83;          /* 170 MHz / 84 ≈ 2.024 MHz */
+        htim1.Init.Prescaler         = 0;
         htim1.Init.CounterMode       = TIM_COUNTERMODE_UP;
-        htim1.Init.Period            = 999;          /* ≈ 2 kHz PWM              */
+        htim1.Init.Period            = 100;
         htim1.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
         htim1.Init.RepetitionCounter = 0;
         HAL_TIM_PWM_Init(&htim1);
@@ -145,7 +145,6 @@ void thread_atuador() {
         oc.OCNIdleState = TIM_OCNIDLESTATE_RESET;
         HAL_TIM_PWM_ConfigChannel(&htim1, &oc, TIM_CHANNEL_1);
 
-        /* ---- Configura GPIO PC0 em Alternate Function para TIM1_CH1 ---- */
         GPIO_InitTypeDef gpio = {0};
         gpio.Pin       = GPIO_PIN_0;
         gpio.Mode      = GPIO_MODE_AF_PP;    /* obrigatório para PWM */
@@ -157,13 +156,15 @@ void thread_atuador() {
         HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
 
         /* TIM1 é Advanced Timer: MOE obrigatório para habilitar saída */
-        TIM1->BDTR |= TIM_BDTR_MOE;
+        //TIM1->BDTR |= TIM_BDTR_MOE;
 
         tim_init_done = true;
     }
 
     /* Atualiza duty cycle com tensão calculada pelo controlador */
-    uint32_t cmp = (uint32_t)((Controle::GetTension() / 4.0f) * 999.0f);
+    uint32_t cmp = (uint32_t)((Controle::GetTension() / 4.0f) * 100.0f);
+    if (cmp > 100) cmp = 100;
+    if (cmp < 0) cmp = 0;
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, cmp);
 }
 
@@ -185,30 +186,30 @@ int main(void){
 	HAL_Init();
     SEGGER_SYSVIEW_Conf();
     SEGGER_SYSVIEW_Start();
+
     /* Cria a thread idle */
     rtos::OS_init(stack_idleThread, sizeof(stack_idleThread));
 
     // prod's consumidor
-    rtos::OSThread_start(&consumidor, "Consumidor", &main_consumidor,
-                             10U, stack_consumidor, sizeof(stack_consumidor));
+//    rtos::OSThread_start(&consumidor, "Consumidor", &main_consumidor,
+//                             10U, stack_consumidor, sizeof(stack_consumidor));
 
-    rtos::OSThread_start(&produtor1, "Prod_1", &main_produtor1,
-                             15U, stack_produtor1, sizeof(stack_produtor1));
+//    rtos::OSThread_start(&produtor1, "Prod_1", &main_produtor1,
+//                             15U, stack_produtor1, sizeof(stack_produtor1));
 
-    rtos::OSThread_start(&produtor2, "Prod_2", &main_produtor2,
-                             20U, stack_produtor2, sizeof(stack_produtor2));
+//    rtos::OSThread_start(&produtor2, "Prod_2", &main_produtor2,
+//                             20U, stack_produtor2, sizeof(stack_produtor2));
 
 
-    /*
-    // controle
-    rtos::OSThread_start(&sensor, "sensor", &thread_sensor,
-                             TASK_PERIOD, stack_sensor, sizeof(stack_sensor));
+    // controle/*
+    rtos::OSThread_start(&sensor, "thread_sensor", &thread_sensor,
+                             10U, stack_sensor, sizeof(stack_sensor));
 
     rtos::OSThread_start(&controle, "controle", &thread_controle,
-                             TASK_PERIOD, stack_controle, sizeof(stack_controle));
+                             10, stack_controle, sizeof(stack_controle));
 
     rtos::OSThread_start(&atuador, "atuador", &thread_atuador,
-                             TASK_PERIOD, stack_atuador, sizeof(stack_atuador));*/
+                             10U, stack_atuador, sizeof(stack_atuador));
 
 
 

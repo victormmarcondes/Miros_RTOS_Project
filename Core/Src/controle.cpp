@@ -2,11 +2,13 @@
 #include "miros.h"
 #include "main.h"
 #include "stm32g4xx_hal.h"
+#include "stm32g4xx_nucleo_bus.h"  
 #include <cstdint>
 
 extern rtos::Semaphore sem_setpoint;
 
 void Controle::init(){
+    BSP_I2C1_Init();
     VL53L4CD_SensorInit(sensor);
     VL53L4CD_StartRanging(sensor);
 }
@@ -42,7 +44,8 @@ void Controle::TaskLeitor(){
 
     if(ready){ 
         VL53L4CD_GetResult(sensor, &result);
-        dist_sensor = result.distance_mm;
+        dist_sensor = 914 - (float)result.distance_mm;
+        if(dist_sensor < 0) dist_sensor = 0;
         VL53L4CD_ClearInterrupt(sensor);
     }
 }

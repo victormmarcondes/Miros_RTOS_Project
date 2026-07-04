@@ -1,4 +1,3 @@
-
 /**
   ******************************************************************************
   * @file    platform.c
@@ -13,125 +12,99 @@
   *
   ******************************************************************************
   *
-  * CONFIGURATION:
-  *   - Adjust I2C_HANDLE to match the I2C instance used (hi2c1, hi2c2, etc.)
-  *   - Adjust VL53L4CD_I2C_ADDR if XSHUT/address pin is configured differently
-  *   - I2C timeout is set via I2C_TIMEOUT_MS (default: 100 ms)
+  * Dev_t é usado diretamente como endereço I2C de 8 bits (ex: 0x52).
+  * Defina o sensor no seu .h como:
   *
-  * The VL53L4CD uses 16-bit register addresses and big-endian data.
-  * This implementation is for a LITTLE-ENDIAN platform (Cortex-M4),
-  * so byte swapping is performed where needed.
+  *     static Dev_t sensor = 0x52;  // 7-bit addr 0x29, shifted: 0x52
+  *
+  * O hi2c1 é obtido via BSP (stm32g4xx_nucleo_bus.c), inicializado
+  * com BSP_I2C1_Init() antes de usar o sensor.
+  *
   ******************************************************************************
   */
 
 #include "platform.h"
-#include "stm32g4xx_hal.h"   /* Adjust to your STM32 family if different */
+#include "stm32g4xx_hal.h"
 
-/* ── User configuration ─────────────────────────────────────────────────── */
+/* ── Configuração ────────────────────────────────────────────────────────── */
 
-/* I2C handle declared in main.c (or wherever CubeMX placed it) */
+/* hi2c1 declarado em stm32g4xx_nucleo_bus.c */
 extern I2C_HandleTypeDef hi2c1;
 #define I2C_HANDLE      hi2c1
 
-/* Default 8-bit I2C address (7-bit = 0x29, shifted left = 0x52) */
-#define VL53L4CD_I2C_ADDR   (0x29 << 1)   /* 0x52 */
+/* Timeout HAL em ms */
+#define I2C_TIMEOUT_MS  100U
 
-/* HAL timeout in milliseconds */
-#define I2C_TIMEOUT_MS      100U
+/* ── Helpers internos ────────────────────────────────────────────────────── */
 
-/* ── Helpers ─────────────────────────────────────────────────────────────── */
-
-/**
- * @brief  Write a 16-bit register address followed by a data buffer over I2C.
- *         The VL53L4CD register address is big-endian (MSB first).
- *
- * @param  RegisterAdress  16-bit register address
- * @param  pData           Pointer to data to write (after address)
- * @param  dataLen         Number of data bytes to write
- * @return 0 on success, non-zero on error
- */
-static uint8_t platform_write(uint16_t RegisterAdress,
+static uint8_t platform_write(uint16_t i2c_addr,
+                              uint16_t reg,
                               const uint8_t *pData,
-                              uint16_t dataLen)
+                              uint16_t len)
 {
-    /* Build the transmit buffer: [addr_MSB, addr_LSB, data...] */
-    uint8_t buf[6]; /* 2 bytes addr + up to 4 bytes data */
+    /* Monta pacote: [reg_MSB, reg_LSB, data...] */
+    uint8_t buf[6];
 
-    if (dataLen > 4U)
-    {
-        return 255U; /* Safety guard – all calls stay within 4 data bytes */
-    }
+    if (len > 4U) { return 255U; }
 
-    buf[0] = (uint8_t)(RegisterAdress >> 8);   /* Address MSB */
-    buf[1] = (uint8_t)(RegisterAdress & 0xFF); /* Address LSB */
+    buf[0] = (uint8_t)(reg >> 8);
+    buf[1] = (uint8_t)(reg & 0xFF);
 
-    for (uint16_t i = 0; i < dataLen; i++)
+    for (uint16_t i = 0; i < len; i++)
     {
         buf[2U + i] = pData[i];
     }
 
     HAL_StatusTypeDef ret = HAL_I2C_Master_Transmit(
         &I2C_HANDLE,
-        VL53L4CD_I2C_ADDR,
+        i2c_addr,
         buf,
-        (uint16_t)(2U + dataLen),
+        (uint16_t)(2U + len),
         I2C_TIMEOUT_MS);
 
     return (ret == HAL_OK) ? 0U : 255U;
 }
 
-/**
- * @brief  Write the 16-bit register address, then read a data buffer over I2C.
- *
- * @param  RegisterAdress  16-bit register address
- * @param  pData           Buffer to store received data
- * @param  dataLen         Number of bytes to read
- * @return 0 on success, non-zero on error
- */
-static uint8_t platform_read(uint16_t RegisterAdress,
+static uint8_t platform_read(uint16_t i2c_addr,
+                             uint16_t reg,
                              uint8_t *pData,
-                             uint16_t dataLen)
+                             uint16_t len)
 {
     uint8_t addr[2];
-    addr[0] = (uint8_t)(RegisterAdress >> 8);
-    addr[1] = (uint8_t)(RegisterAdress & 0xFF);
+    addr[0] = (uint8_t)(reg >> 8);
+    addr[1] = (uint8_t)(reg & 0xFF);
 
-    /* Send register address (no STOP between write and read) */
+    /* Envia endereço do registrador */
     HAL_StatusTypeDef ret = HAL_I2C_Master_Transmit(
         &I2C_HANDLE,
-        VL53L4CD_I2C_ADDR,
+        i2c_addr,
         addr,
         2U,
         I2C_TIMEOUT_MS);
 
-    if (ret != HAL_OK)
-    {
-        return 255U;
-    }
+    if (ret != HAL_OK) { return 255U; }
 
-    /* Read the requested bytes */
+    /* Lê os bytes */
     ret = HAL_I2C_Master_Receive(
         &I2C_HANDLE,
-        VL53L4CD_I2C_ADDR,
+        i2c_addr,
         pData,
-        dataLen,
+        len,
         I2C_TIMEOUT_MS);
 
     return (ret == HAL_OK) ? 0U : 255U;
 }
 
-/* ── Public API ──────────────────────────────────────────────────────────── */
+/* ── API pública ─────────────────────────────────────────────────────────── */
 
 uint8_t VL53L4CD_RdDWord(Dev_t dev, uint16_t RegisterAdress, uint32_t *value)
 {
-    (void)dev; /* Unused – single device on bus */
-
     uint8_t buf[4];
-    uint8_t status = platform_read(RegisterAdress, buf, 4U);
+    uint8_t status = platform_read((uint16_t)dev, RegisterAdress, buf, 4U);
 
     if (status == 0U)
     {
-        /* Sensor sends big-endian; reconstruct as host uint32_t */
+        /* Sensor envia big-endian → reconstrói no host (little-endian) */
         *value = ((uint32_t)buf[0] << 24)
                | ((uint32_t)buf[1] << 16)
                | ((uint32_t)buf[2] <<  8)
@@ -143,10 +116,8 @@ uint8_t VL53L4CD_RdDWord(Dev_t dev, uint16_t RegisterAdress, uint32_t *value)
 
 uint8_t VL53L4CD_RdWord(Dev_t dev, uint16_t RegisterAdress, uint16_t *value)
 {
-    (void)dev;
-
     uint8_t buf[2];
-    uint8_t status = platform_read(RegisterAdress, buf, 2U);
+    uint8_t status = platform_read((uint16_t)dev, RegisterAdress, buf, 2U);
 
     if (status == 0U)
     {
@@ -158,10 +129,8 @@ uint8_t VL53L4CD_RdWord(Dev_t dev, uint16_t RegisterAdress, uint16_t *value)
 
 uint8_t VL53L4CD_RdByte(Dev_t dev, uint16_t RegisterAdress, uint8_t *value)
 {
-    (void)dev;
-
     uint8_t buf[1];
-    uint8_t status = platform_read(RegisterAdress, buf, 1U);
+    uint8_t status = platform_read((uint16_t)dev, RegisterAdress, buf, 1U);
 
     if (status == 0U)
     {
@@ -173,41 +142,33 @@ uint8_t VL53L4CD_RdByte(Dev_t dev, uint16_t RegisterAdress, uint8_t *value)
 
 uint8_t VL53L4CD_WrByte(Dev_t dev, uint16_t RegisterAdress, uint8_t value)
 {
-    (void)dev;
-
     uint8_t buf[1] = { value };
-    return platform_write(RegisterAdress, buf, 1U);
+    return platform_write((uint16_t)dev, RegisterAdress, buf, 1U);
 }
 
 uint8_t VL53L4CD_WrWord(Dev_t dev, uint16_t RegisterAdress, uint16_t value)
 {
-    (void)dev;
-
-    /* Big-endian on the wire */
     uint8_t buf[2];
     buf[0] = (uint8_t)(value >> 8);
     buf[1] = (uint8_t)(value & 0xFF);
 
-    return platform_write(RegisterAdress, buf, 2U);
+    return platform_write((uint16_t)dev, RegisterAdress, buf, 2U);
 }
 
 uint8_t VL53L4CD_WrDWord(Dev_t dev, uint16_t RegisterAdress, uint32_t value)
 {
-    (void)dev;
-
     uint8_t buf[4];
     buf[0] = (uint8_t)(value >> 24);
     buf[1] = (uint8_t)(value >> 16);
     buf[2] = (uint8_t)(value >>  8);
     buf[3] = (uint8_t)(value & 0xFF);
 
-    return platform_write(RegisterAdress, buf, 4U);
+    return platform_write((uint16_t)dev, RegisterAdress, buf, 4U);
 }
 
 uint8_t VL53L4CD_WaitMs(Dev_t dev, uint32_t TimeMs)
 {
     (void)dev;
-
     HAL_Delay(TimeMs);
     return 0U;
 }

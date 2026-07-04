@@ -18,14 +18,15 @@ class Controle{
     static inline const float q1 = KR * (-1.0f);
 
     private:
-    static inline volatile float set_point = 200.0f; //altura
+    static inline volatile uint16_t set_point = 200U; //altura
     static inline volatile float dist_sensor = 0.0f; //leitura sensor
     static inline volatile float tensao_pwm = 0.0f;  //pwm
-    static inline Dev_t sensor;
+    static inline Dev_t sensor = 0x52U;
+    //static inline Dev_t sensor;
 
     //passado
-    static inline float e_k1;
-    static inline float u_k1;
+    static inline float e_k1 = 0;
+    static inline float u_k1 = 0;
 
     public:
     static void init();
