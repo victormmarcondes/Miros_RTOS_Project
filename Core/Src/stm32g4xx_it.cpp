@@ -94,8 +94,8 @@ extern "C" void EXTI15_10_IRQHandler(void) {
     static rtos::AperiodicTask task;
     task.Handler    = &task_muda_setpoint;
     task.parametros = nullptr;
+    rtos::Aperiodic_queue.push_back(&task);
 
-    rtos::APTask = &task;
     rtos::OS_readySet |= 1U;               /* ativa Deferrable Server (OS_thread[1]) */
 }
 

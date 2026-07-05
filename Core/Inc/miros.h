@@ -12,6 +12,7 @@
 #include <cstdint>
 #include "SEGGER.h"
 #include "SEGGER_SYSVIEW.h"
+#include <vector>
 
 
 namespace rtos {
@@ -32,8 +33,6 @@ typedef struct{
     void *parametros;
 } AperiodicTask;
 
-extern AperiodicTask* APTask;
-
 class Semaphore {
 private:
 
@@ -53,6 +52,8 @@ extern uint32_t global_tick;
 extern uint8_t click;
 extern OSThread * volatile OS_curr;
 extern uint32_t OS_readySet;
+extern std::vector<rtos::AperiodicTask*>Aperiodic_queue;
+
 
 const uint16_t TICKS_PER_SEC = 1000U;
 

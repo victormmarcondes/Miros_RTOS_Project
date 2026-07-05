@@ -48,6 +48,7 @@ namespace rtos {
     uint8_t DFS_budget = 20U;
     uint8_t DFS_budget_max = 20U;
     const uint8_t DFS_period = 40U;
+    std::vector<AperiodicTask*> Aperiodic_queue;
 
     OSThread *OS_thread[32 + 1]; /* array of threads started so far */
     uint32_t OS_readySet; /* bitmask of threads that are ready to run */
@@ -59,8 +60,6 @@ namespace rtos {
 
     OSThread AperiodicServer;
     uint32_t stack_aperiodic[256];
-
-    AperiodicTask* APTask = nullptr;
 
     Semaphore::Semaphore(int32_t init)
     {
@@ -132,11 +131,15 @@ namespace rtos {
 
     void DeferrableServer(){
         while(1){
-        	if(DFS_budget > 0 && APTask != nullptr){  // se tem budget e tarefa pronta, executa
-        	    APTask->Handler();
-        	    APTask = nullptr;
+        	__disable_irq();
+        	if (DFS_budget > 0 && (OS_readySet & (1U << (1 - 1U))) != 0) {
+        	    auto* task = Aperiodic_queue.front();
+        	    Aperiodic_queue.erase(Aperiodic_queue.begin());
+        	    __enable_irq();
+                task->Handler();
         	}
-        	OS_readySet &= ~1U;
+            if(Aperiodic_queue.empty()) OS_readySet &= ~1U;
+            __enable_irq();
             OS_yield();
         }
     }
@@ -174,7 +177,7 @@ namespace rtos {
             	uint8_t aux = 0;
             	uint32_t aux_deadline = 0xFFFFFFFFU;
             	for(uint8_t i = 1U; i < OS_threadNum; i++){
-            		if((OS_readySet & (1U <<(i - 1U))) != 0 ){
+            		if((OS_readySet & (1U <<(i - 1U))) != 0){
             			if(OS_thread[i]->deadline < aux_deadline){
                             aux = i;
                             aux_deadline = OS_thread[i]->deadline;
