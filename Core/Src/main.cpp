@@ -92,7 +92,7 @@ void main_consumidor() {
 
 void task_muda_setpoint() {
     sem_setpoint.lock();
-    Controle::SetSetPoint(50.0f);
+    Controle::SetSetPoint(100.0f);
     sem_setpoint.unlock();
 }
 
@@ -168,17 +168,6 @@ void thread_atuador() {
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, cmp);
 }
 
-void EXTI15_10_IRQHandler(void) {
-    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_13);  /* limpa flag para evitar reset */
-
-    static rtos::AperiodicTask task;
-    task.Handler    = &task_muda_setpoint;
-    task.parametros = nullptr;
-
-    rtos::APTask = &task;
-    rtos::OS_readySet |= 1U;               /* ativa Deferrable Server (OS_thread[1]) */
-}
-
 uint32_t stack_idleThread[256];
 
 int main(void){
@@ -186,6 +175,20 @@ int main(void){
 	HAL_Init();
     SEGGER_SYSVIEW_Conf();
     SEGGER_SYSVIEW_Start();
+
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+	__HAL_RCC_GPIOC_CLK_ENABLE();
+	__HAL_RCC_SYSCFG_CLK_ENABLE();
+
+	GPIO_InitStruct.Pin   = GPIO_PIN_13;
+	GPIO_InitStruct.Mode  = GPIO_MODE_IT_FALLING;
+	GPIO_InitStruct.Pull  = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+	//HAL_NVIC_SetPriority(EXTI15_10_IRQn, 2U, 0U);
+	//HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
     /* Cria a thread idle */
     rtos::OS_init(stack_idleThread, sizeof(stack_idleThread));
@@ -202,19 +205,19 @@ int main(void){
 
 
     // controle/*
-    rtos::OSThread_start(&sensor, "thread_sensor", &thread_sensor,
-                             10U, stack_sensor, sizeof(stack_sensor));
+    //rtos::OSThread_start(&sensor, "thread_sensor", &thread_sensor,
+    //                        10U, stack_sensor, sizeof(stack_sensor));
 
     rtos::OSThread_start(&controle, "controle", &thread_controle,
                              10, stack_controle, sizeof(stack_controle));
 
-    rtos::OSThread_start(&atuador, "atuador", &thread_atuador,
-                             10U, stack_atuador, sizeof(stack_atuador));
+    //rtos::OSThread_start(&atuador, "atuador", &thread_atuador,
+    //                         10U, stack_atuador, sizeof(stack_atuador));
 
 
 
 
-    __enable_irq();
+    //__enable_irq();
     rtos::OS_run();
 }
 

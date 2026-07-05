@@ -334,19 +334,10 @@ namespace rtos {
     /***********************************************/
     void OS_onStartup(void) {
 
-        GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-        __HAL_RCC_GPIOC_CLK_ENABLE();
-
-        GPIO_InitStruct.Pin   = GPIO_PIN_13;
-        GPIO_InitStruct.Mode  = GPIO_MODE_IT_FALLING;
-        GPIO_InitStruct.Pull  = GPIO_PULLUP;
-        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;  
-        HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
         NVIC_SetPriority(PendSV_IRQn, 0xFFU);
         NVIC_SetPriority(SysTick_IRQn, 0x00U);
         NVIC_SetPriority(EXTI15_10_IRQn, 0x32U);
+        NVIC_EnableIRQ(EXTI15_10_IRQn);
     }
 
     void OS_onIdle(void) {

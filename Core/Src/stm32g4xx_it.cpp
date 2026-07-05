@@ -86,6 +86,19 @@ void NMI_Handler(void)                                             //Interrupcoe
   /* USER CODE END NonMaskableInt_IRQn 1 */
 }
 
+extern void task_muda_setpoint();
+
+extern "C" void EXTI15_10_IRQHandler(void) {
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_13);  /* limpa flag para evitar reset */
+
+    static rtos::AperiodicTask task;
+    task.Handler    = &task_muda_setpoint;
+    task.parametros = nullptr;
+
+    rtos::APTask = &task;
+    rtos::OS_readySet |= 1U;               /* ativa Deferrable Server (OS_thread[1]) */
+}
+
 /**
   * @brief This function handles Hard fault interrupt.
   */
@@ -273,7 +286,7 @@ void SPI2_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 void USART1_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 void USART2_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 void USART3_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
-void EXTI15_10_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
+//void EXTI15_10_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 void RTC_Alarm_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 void USBWakeUp_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 void TIM8_BRK_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
