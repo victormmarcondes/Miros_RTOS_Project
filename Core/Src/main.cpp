@@ -194,25 +194,25 @@ int main(void){
     rtos::OS_init(stack_idleThread, sizeof(stack_idleThread));
 
     // prod's consumidor
-//    rtos::OSThread_start(&consumidor, "Consumidor", &main_consumidor,
-//                             10U, stack_consumidor, sizeof(stack_consumidor));
+    rtos::OSThread_start(&consumidor, "Consumidor", &main_consumidor,
+                             10U, stack_consumidor, sizeof(stack_consumidor));
 
-//    rtos::OSThread_start(&produtor1, "Prod_1", &main_produtor1,
-//                             15U, stack_produtor1, sizeof(stack_produtor1));
+    rtos::OSThread_start(&produtor1, "Prod_1", &main_produtor1,
+                             15U, stack_produtor1, sizeof(stack_produtor1));
 
-//    rtos::OSThread_start(&produtor2, "Prod_2", &main_produtor2,
-//                             20U, stack_produtor2, sizeof(stack_produtor2));
+    rtos::OSThread_start(&produtor2, "Prod_2", &main_produtor2,
+                             20U, stack_produtor2, sizeof(stack_produtor2));
 
-
-    // controle/*
-    //rtos::OSThread_start(&sensor, "thread_sensor", &thread_sensor,
-    //                        10U, stack_sensor, sizeof(stack_sensor));
+/*
+    controle
+    rtos::OSThread_start(&sensor, "thread_sensor", &thread_sensor,
+                            10U, stack_sensor, sizeof(stack_sensor));
 
     rtos::OSThread_start(&controle, "controle", &thread_controle,
                              10, stack_controle, sizeof(stack_controle));
 
-    //rtos::OSThread_start(&atuador, "atuador", &thread_atuador,
-    //                         10U, stack_atuador, sizeof(stack_atuador));
+    rtos::OSThread_start(&atuador, "atuador", &thread_atuador,
+                             10U, stack_atuador, sizeof(stack_atuador));*/
 
 
 

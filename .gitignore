@@ -38,4 +38,13 @@ build
 **/.directory
 /Debug/
 /Release/
-.metadata/
+
+# Renode
+*.repl
+*.resc
+
+# Arquivos de configuração de IDE/debug
+*.launch
+
+# Ferramentas auxiliares locais
+tools/
